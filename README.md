@@ -42,7 +42,7 @@ Nenhuma chave de API e nenhum destino embutido. Serviços públicos e gratuitos:
 | Wikipédia em inglês (busca geográfica `nearcoord`) | Lugares em volta do destino, ordenados pelos artigos mais citados |
 | Wikidata | Nome e descrição de cada lugar em português |
 | Wikipédia (resumo do artigo e miniatura) | Foto e texto do "Ler mais" |
-| Leaflet + tiles da CARTO (dados do OpenStreetMap) | Mapa do dia no roteiro |
+| OpenStreetMap + Leaflet | Mapa do dia no roteiro |
 
 São serviços abertos, sem garantia de disponibilidade e com limites de uso justo. Para uso pessoal funcionam bem; para publicar o app para muita gente, vale ter um servidor próprio no meio.
 

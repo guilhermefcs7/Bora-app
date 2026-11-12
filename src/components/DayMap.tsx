@@ -4,8 +4,12 @@ import { WebView } from 'react-native-webview';
 import type { Place } from '../types';
 import { RouteMap } from './RouteMap';
 
-// Mapa real do dia (dados do OpenStreetMap, tiles da CARTO, via Leaflet), sem chave de API.
-// Os tiles do próprio openstreetmap.org recusam pedidos sem Referer, que é o caso de WebView e iframe isolado.
+// Mapa real do dia (OpenStreetMap via Leaflet), sem chave de API.
+// Os tiles do openstreetmap.org recusam pedidos sem Referer. Por isso o iframe da web não usa
+// `sandbox` (herda a origem da página) e o WebView nativo recebe uma baseUrl.
+
+/** Endereço público do app, enviado como Referer nos pedidos de mapa do app nativo. */
+const APP_URL = 'https://guilhermefcs7.github.io/Bora-app/';
 // Enquanto o mapa não carrega, ou sem internet, fica visível o desenho simples da rota.
 
 const esc = (s: string) => s.replace(/[<>&"'\\]/g, ' ');
@@ -25,7 +29,7 @@ function say(t){try{if(window.ReactNativeWebView){window.ReactNativeWebView.post
 try{
 var P=${pts};
 var map=L.map("m",{zoomControl:true,scrollWheelZoom:false});
-var tiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:19,attribution:"&copy; OpenStreetMap &copy; CARTO"});
+var tiles=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"});
 var told=false;tiles.on("tileload",function(){if(!told){told=true;say("ok")}});
 tiles.addTo(map);
 var ll=P.map(function(p){return [p.a,p.o]});
@@ -68,14 +72,13 @@ export const DayMap = ({ stops, height = 240 }: { stops: Place[]; height?: numbe
           key,
           title: 'Mapa do dia',
           srcDoc: html,
-          sandbox: 'allow-scripts',
           style: frameStyle,
         })
       ) : (
         <WebView
           key={key}
           originWhitelist={['*']}
-          source={{ html }}
+          source={{ html, baseUrl: APP_URL }}
           onMessage={(e) => e.nativeEvent.data === 'ok' && setReady(true)}
           scrollEnabled={false}
           style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, opacity: ready ? 1 : 0, backgroundColor: 'transparent' }}
