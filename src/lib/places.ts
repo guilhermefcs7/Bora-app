@@ -206,11 +206,18 @@ export const classifyPt = (title: string, description?: string): { cat: Category
 export type Candidate = Place & { wikidata?: string };
 
 /** Escolhe os lugares visitáveis mais conhecidos da resposta da Wikipédia, sem repetição. */
-export const pickPlaces = (pages: WikiPage[], limit = 24, lang: 'en' | 'pt' = 'en', skip?: Set<string>): Candidate[] => {
+export const pickPlaces = (
+  pages: WikiPage[],
+  limit = 24,
+  lang: 'en' | 'pt' = 'en',
+  skip?: Set<string>,
+  fill = true,
+): Candidate[] => {
   const ranked = [...pages].sort((a, b) => (a.index ?? 1e9) - (b.index ?? 1e9));
   const seen = new Set<string>(skip);
   const perCat = new Map<Category, number>();
   const out: Candidate[] = [];
+  const overflow: Candidate[] = [];
   let stadium = false;
   for (const p of ranked) {
     const c = p.coordinates?.[0];
@@ -223,15 +230,13 @@ export const pickPlaces = (pages: WikiPage[], limit = 24, lang: 'en' | 'pt' = 'e
     // limita cada categoria (e estádios a um), para a votação ter variedade.
     // Natureza fica fora do limite: em destino de ecoturismo ela é quase tudo.
     const used = perCat.get(kind.cat) ?? 0;
-    if (kind.cat !== 'natureza' && used >= Math.ceil(limit / 3)) continue;
     if (/(^|\s)(stadium|arena|est[áa]dio)(\s|$)/i.test(words(`${p.title} ${p.description ?? ''}`))) {
       if (stadium) continue;
       stadium = true;
     }
-    perCat.set(kind.cat, used + 1);
     seen.add(key);
     seen.add(name.toLowerCase());
-    out.push({
+    const item: Candidate = {
       id: `${lang === 'pt' ? 'wpp' : 'wp'}-${p.pageid}`,
       name,
       cat: kind.cat,
@@ -243,22 +248,38 @@ export const pickPlaces = (pages: WikiPage[], limit = 24, lang: 'en' | 'pt' = 'e
       img: p.thumbnail?.source,
       ...(lang === 'en' ? { wikiEn: p.title } : { wikiPt: p.title }),
       wikidata: p.pageprops?.wikibase_item,
-    });
+    };
+    // categoria já cheia: guarda para completar a lista no fim, se sobrar espaço
+    if (kind.cat !== 'natureza' && used >= Math.ceil(limit / 3)) {
+      overflow.push(item);
+      continue;
+    }
+    perCat.set(kind.cat, used + 1);
+    out.push(item);
     if (out.length >= limit) break;
   }
-  return out;
+  // variedade primeiro; se ainda faltar, completa com os mais conhecidos das categorias cheias
+  return fill ? [...out, ...overflow.slice(0, Math.max(0, limit - out.length))] : out;
 };
 
 /** Junta as duas fontes: primeiro os da Wikipédia em inglês (melhor ranking), depois os só em português. */
 export const mergeSources = (en: WikiPage[], pt: WikiPage[], limit: number): Candidate[] => {
-  const first = pickPlaces(en, limit, 'en');
-  if (first.length >= limit) return first;
+  // 1) variedade pela Wikipédia em inglês; 2) o que só existe em português; 3) se ainda faltar,
+  //    completa com os mais conhecidos das categorias que já estavam cheias
+  const first = pickPlaces(en, limit, 'en', undefined, false);
   const taken = new Set<string>();
-  for (const c of first) {
+  const mark = (c: Candidate) => {
     if (c.wikidata) taken.add(c.wikidata);
     taken.add(c.name.toLowerCase());
-  }
-  return [...first, ...pickPlaces(pt, limit - first.length, 'pt', taken)];
+  };
+  first.forEach(mark);
+  const second = first.length < limit ? pickPlaces(pt, limit - first.length, 'pt', taken, false) : [];
+  second.forEach(mark);
+  const merged = [...first, ...second];
+  if (merged.length >= limit) return merged;
+  const ids = new Set(merged.map((c) => c.id));
+  const rest = pickPlaces(en, limit, 'en').filter((c) => !ids.has(c.id));
+  return [...merged, ...rest.slice(0, limit - merged.length)];
 };
 
 type WdEntity = {
