@@ -82,6 +82,13 @@ const BASE: Record<Category, { interests: Interest[]; note: string; extra: strin
 
 // palavras da descrição em inglês -> interesses e públicos extras
 const HINTS: [RegExp, Interest[], string[]][] = [
+  [/(^|\s)(waterfall|cachoeira|cachoeir[ãa]o|queda d'[áa]gua|po[çc]o)(\s|$)/i, ['natureza', 'fotografia'], ['Quem topa trilha', 'Banho de cachoeira']],
+  [/\b(cave|gruta|gruna|caverna|lapa)\b/i, ['natureza'], ['Aventureiros']],
+  [/\b(trail|trilha|valley|vale|canyon|serra|national park|parque nacional)\b/i, ['natureza', 'fotografia'], ['Quem topa caminhada']],
+  [/\b(morro|pico|mirante|miradouro|rampa)\b/i, ['fotografia', 'natureza'], ['Pôr do sol', 'Quem topa caminhada']],
+  [/\b(igreja|catedral|capela|mosteiro|convento)\b/i, ['arquitetura', 'historia'], ['Quem busca um momento de calma']],
+  [/\b(museu|galeria)\b/i, ['arte', 'historia'], []],
+  [/(^|\s)(cemit[ée]rio|ru[íi]nas?|forte|fortaleza|castelo|pal[áa]cio|sobrado|solar)(\s|$)/i, ['historia', 'arquitetura'], []],
   [/\b(art|gallery|sculpture|painting)\b/i, ['arte'], []],
   [/\b(history|historic|historical|archaeolog|heritage|memorial|ancient|medieval|colonial)\b/i, ['historia'], []],
   [/\b(science|natural history|planetarium|technology|maritime)\b/i, ['familia'], ['Curiosos de todas as idades']],
@@ -109,7 +116,7 @@ export type PlaceProfile = {
 const joinPt = (items: string[]) =>
   items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`;
 
-const STADIUM = /\b(stadium|arena)\b/i;
+const STADIUM = /(^|\s)(stadium|arena|est[áa]dio)(\s|$|,)/i;
 
 export const profileOf = (place: Pick<Place, 'cat' | 'kind'>): PlaceProfile => {
   // estádio cai na categoria "monumento", mas o perfil é outro

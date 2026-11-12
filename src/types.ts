@@ -31,6 +31,8 @@ export type Place = {
   wikiEn?: string;
   /** texto do "ler mais", guardado depois da primeira leitura para abrir offline */
   more?: string;
+  /** distância em km do centro do destino, quando o lugar fica fora dele */
+  far?: number;
 };
 
 export type Destination = {
@@ -39,6 +41,8 @@ export type Destination = {
   country: string;
   lat: number;
   lng: number;
+  /** raio em km efetivamente usado na busca dos lugares */
+  radiusKm?: number;
   places: Place[];
 };
 
@@ -62,6 +66,8 @@ export type Trip = {
   pace: Pace;
   /** atividades por dia; viagens antigas só têm `pace` */
   perDay?: number;
+  /** raio em km usado na busca dos lugares; grande quando o destino tem pouca coisa catalogada */
+  searchKm?: number;
   places: Place[];
   members: Member[];
   /** ids dos membros criados neste aparelho */

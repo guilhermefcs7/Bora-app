@@ -1,7 +1,8 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SwipeDeck, type SwipeCardHandle } from '../../components/SwipeDeck';
 import { Avatar, Button, Card, Chip, H2, IconButton, Progress } from '../../components/ui';
+import { suggestSpots, type SpotSuggestion } from '../../lib/places';
 import { uid } from '../../lib/storage';
 import { useStore } from '../../store';
 import { catInfo, colors } from '../../theme';
@@ -17,6 +18,36 @@ export const VoteTab = ({ trip, voterId, onPickVoter, onDone, onMore }: Props) =
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCat, setNewCat] = useState<Category>('comida');
+  const [spots, setSpots] = useState<SpotSuggestion[]>([]);
+  const [spot, setSpot] = useState<SpotSuggestion | null>(null);
+  const [searching, setSearching] = useState(false);
+  const empty = trip.places.length === 0;
+  const showAdd = adding || empty;
+
+  // busca o lugar digitado perto do destino, para entrar no roteiro com a localização certa
+  useEffect(() => {
+    if (!showAdd || spot || newName.trim().length < 3) {
+      setSpots([]);
+      setSearching(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const list = await suggestSpots(newName, trip.lat, trip.lng, ctrl.signal);
+        if (!ctrl.signal.aborted) setSpots(list);
+      } catch {
+        if (!ctrl.signal.aborted) setSpots([]);
+      } finally {
+        if (!ctrl.signal.aborted) setSearching(false);
+      }
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [newName, spot, showAdd, trip.lat, trip.lng]);
 
   const voter = trip.members.find((m) => m.id === voterId) ?? trip.members[0];
   const myVotes = trip.votes[voter.id] ?? {};
@@ -47,19 +78,22 @@ export const VoteTab = ({ trip, voterId, onPickVoter, onDone, onMore }: Props) =
   const addPlace = () => {
     const name = newName.trim();
     if (!name) return;
-    // lugar manual não tem coordenada própria: entra no centro do destino
+    // escolhido da busca: entra com a coordenada real; digitado livre: fica no centro do destino
     const place: Place = {
       id: `custom-${uid()}`,
-      name,
+      name: spot?.name ?? name,
       cat: newCat,
-      lat: trip.lat,
-      lng: trip.lng,
+      lat: spot?.lat ?? trip.lat,
+      lng: spot?.lng ?? trip.lng,
       dur: 60,
-      desc: 'Lugar adicionado pelo grupo.',
+      area: spot?.detail || undefined,
+      desc: spot ? 'Lugar adicionado pelo grupo.' : 'Lugar adicionado pelo grupo, sem localização exata.',
       custom: true,
     };
     updateTrip(trip.id, (t) => ({ ...t, places: [place, ...t.places] }), true);
     setNewName('');
+    setSpot(null);
+    setSpots([]);
     setAdding(false);
   };
 
@@ -93,17 +127,62 @@ export const VoteTab = ({ trip, voterId, onPickVoter, onDone, onMore }: Props) =
         </ScrollView>
       </View>
 
-      {adding && (
+      {trip.searchKm !== undefined && trip.searchKm >= 40 && !empty && (
+        <View style={s.region}>
+          <Text style={s.regionText}>
+            {trip.destination} tem poucos lugares catalogados, então a lista cobre a região num raio de {trip.searchKm} km.
+            Cada cartão mostra a distância.
+          </Text>
+        </View>
+      )}
+
+      {showAdd && (
         <Card style={s.addBox}>
+          {empty && (
+            <Text style={s.emptyText}>
+              Não encontramos lugares catalogados em {trip.destination}. Busque abaixo o que você quer visitar (cachoeira, trilha,
+              restaurante, pousada) e monte a lista do seu jeito.
+            </Text>
+          )}
           <TextInput
             accessibilityLabel="Nome do lugar"
             value={newName}
-            onChangeText={setNewName}
-            placeholder="Nome do lugar"
+            onChangeText={(t) => {
+              setNewName(t);
+              setSpot(null);
+            }}
+            placeholder="Busque um lugar pelo nome"
             placeholderTextColor={colors.muted}
-            style={s.input}
+            style={[s.input, spot && { borderColor: colors.blue, backgroundColor: colors.blueTint }]}
             maxLength={60}
           />
+          {searching && <ActivityIndicator size="small" color={colors.muted} style={{ alignSelf: 'flex-start' }} />}
+          {spots.length > 0 && (
+            <View style={s.spotList}>
+              {spots.map((sp, i) => (
+                <Pressable
+                  key={sp.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${sp.name}${sp.detail ? `, ${sp.detail}` : ''}`}
+                  onPress={() => {
+                    setSpot(sp);
+                    setNewName(sp.name);
+                    setNewCat(sp.cat);
+                    setSpots([]);
+                  }}
+                  style={[s.spot, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
+                >
+                  <Text style={s.spotName}>{sp.name}</Text>
+                  {sp.detail ? <Text style={s.spotDetail}>{sp.detail}</Text> : null}
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <Text style={s.spotDetail}>
+            {spot
+              ? 'Localização encontrada. Confira a categoria e adicione.'
+              : 'Escolha um resultado para o lugar entrar no mapa. Sem escolher, ele entra sem localização exata.'}
+          </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {(Object.keys(catInfo) as Category[]).map((c) => (
               <Chip key={c} label={catInfo[c].label} active={newCat === c} onPress={() => setNewCat(c)} />
@@ -113,7 +192,7 @@ export const VoteTab = ({ trip, voterId, onPickVoter, onDone, onMore }: Props) =
         </Card>
       )}
 
-      {current ? (
+      {empty ? null : current ? (
         <>
           <SwipeDeck
             ref={deck}
@@ -179,6 +258,13 @@ const s = StyleSheet.create({
   count: { fontSize: 13, fontWeight: '600', color: colors.ink },
   filters: { paddingHorizontal: 20, paddingTop: 10, gap: 8 },
   addBox: { marginHorizontal: 20, marginTop: 10, padding: 12, gap: 10 },
+  emptyText: { fontSize: 14, lineHeight: 20, color: colors.body },
+  region: { marginHorizontal: 20, marginTop: 10, padding: 10, borderRadius: 12, backgroundColor: colors.blueTint },
+  regionText: { fontSize: 12, lineHeight: 17, color: colors.ink },
+  spotList: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, overflow: 'hidden' },
+  spot: { paddingHorizontal: 12, paddingVertical: 8, minHeight: 48, justifyContent: 'center', backgroundColor: colors.surface },
+  spotName: { fontSize: 15, fontWeight: '600', color: colors.ink },
+  spotDetail: { fontSize: 12, color: colors.muted },
   input: {
     height: 48,
     borderRadius: 12,

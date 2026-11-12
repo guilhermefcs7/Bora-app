@@ -1,4 +1,5 @@
 import type { Category, Destination, Place } from '../types';
+import { distanceKm } from './geo';
 
 // Dados 100% dinâmicos e gratuitos, sem chave de API:
 // - Photon (komoot / OpenStreetMap): autocomplete de destinos enquanto a pessoa digita
@@ -127,7 +128,7 @@ const RULES: [Category, RegExp, number][] = [
   ['museu', /\b(museum|art gallery|gallery|planetarium)\b/i, 90],
   ['praia', /\bbeach\b/i, 120],
   ['mirante', /\b(observation|viewpoint|lighthouse|ferris wheel|cable car|hill|mountain|peak|elevator|lift)\b/i, 45],
-  ['natureza', /\b(park|garden|gardens|zoo|aquarium|lake|lagoon|island|forest|nature reserve|botanical|woodland)\b/i, 75],
+  ['natureza', /\b(park|garden|gardens|zoo|aquarium|lake|lagoon|island|forest|nature reserve|botanical|woodland|waterfall|cave|canyon|valley|trail|gorge|spring)\b/i, 90],
   ['comida', /\b(market|food hall)\b/i, 60],
   ['noite', /\b(theatre|theater|opera|concert hall|cabaret|music venue)\b/i, 120],
   ['compras', /\b(shopping|department store|mall|arcade)\b/i, 60],
@@ -157,27 +158,72 @@ const GENERIC: Record<Category, string> = {
   monumento: 'Lugar histórico da região.',
 };
 
+// Artigos da Wikipédia em português muitas vezes não têm descrição curta,
+// então a classificação olha também o título ("Cachoeira da Fumaça", "Morro do Pai Inácio").
+const EXCLUDE_PT =
+  /(^|\s)(munic[ií]pio|cidade|distrito|aeroporto|aer[óo]dromo|rodovia|esta[çc][ãa]o|escola|col[ée]gio|universidade|faculdade|instituto|empresa|clube|microrregi[ãa]o|mesorregi[ãa]o|regi[ãa]o|bairro|usina|barragem|hospital|emissora|r[áa]dio|jornal|elei[çc][ãa]o|batalha|diocese|arquidiocese|povoado|rio|riacho|c[óo]rrego|curso|bacia|esp[ée]cie|g[êe]nero|fam[íi]lia|minera[çc][ãa]o|garimpo|lista)(\s|$)/i;
+
+const RULES_PT: [Category, RegExp, number][] = [
+  ['praia', /(^|\s)praia(\s|$)/i, 120],
+  ['museu', /(^|\s)(museu|galeria|pinacoteca|planet[áa]rio)(\s|$)/i, 90],
+  ['mirante', /(^|\s)(morro|pico|mirante|miradouro|monte|rampa|farol|elevador)(\s|$)/i, 90],
+  [
+    'natureza',
+    /(^|\s)(cachoeira|cachoeir[ãa]o|queda|po[çc]o|gruta|gruna|caverna|lapa|parque|vale|c[âa]nion|canyon|trilha|lagoa|lago|serra|reserva|jardim|ilha|floresta|mata)(\s|$)/i,
+    150,
+  ],
+  ['comida', /(^|\s)(mercado|feira)(\s|$)/i, 60],
+  ['noite', /(^|\s)(teatro|[óo]pera)(\s|$)/i, 120],
+  ['compras', /(^|\s)(shopping)(\s|$)/i, 60],
+  ['bairro', /(^|\s)(pra[çc]a|largo|centro hist[óo]rico|cal[çc]ad[ãa]o|orla|vila)(\s|$)/i, 60],
+  [
+    'monumento',
+    /(^|\s)(igreja|catedral|bas[íi]lica|capela|mosteiro|convento|santu[áa]rio|forte|fortaleza|castelo|pal[áa]cio|pa[çc]o|monumento|memorial|ponte|cemit[ée]rio|ru[íi]nas?|s[íi]tio|solar|sobrado|est[áa]dio|arena)(\s|$)/i,
+    45,
+  ],
+];
+
+// descrição que deixa claro que o artigo é sobre uma localidade ou organização, não um passeio
+const HARD_PT = /(^|\s)(munic[ií]pio|cidade|distrito|bairro|povoado|aeroporto|empresa|clube|esta[çc][ãa]o)(\s|$)/i;
+
+const words = (t: string) => ` ${t.replace(/[.,;:()]/g, ' ')} `;
+
+/** Classifica um artigo em português pelo título e pela descrição. */
+export const classifyPt = (title: string, description?: string): { cat: Category; dur: number } | null => {
+  const clean = title.replace(/\s*\([^)]*\)$/, '');
+  // a exclusão olha a descrição inteira; no título, só a primeira palavra ("Rio Mucugê", "Aeroporto de...")
+  const firstWord = clean.split(/\s+/)[0] ?? '';
+  if (EXCLUDE_PT.test(` ${firstWord} `)) return null;
+  if (description && HARD_PT.test(words(description))) return null;
+  // o título manda: "Cachoeira da Califórnia" é cachoeira mesmo que a descrição cite um parque ou região
+  for (const [cat, re, dur] of RULES_PT) if (re.test(words(clean))) return { cat, dur };
+  if (!description || EXCLUDE_PT.test(words(description))) return null;
+  for (const [cat, re, dur] of RULES_PT) if (re.test(words(description))) return { cat, dur };
+  return null;
+};
+
 export type Candidate = Place & { wikidata?: string };
 
 /** Escolhe os lugares visitáveis mais conhecidos da resposta da Wikipédia, sem repetição. */
-export const pickPlaces = (pages: WikiPage[], limit = 24): Candidate[] => {
+export const pickPlaces = (pages: WikiPage[], limit = 24, lang: 'en' | 'pt' = 'en', skip?: Set<string>): Candidate[] => {
   const ranked = [...pages].sort((a, b) => (a.index ?? 1e9) - (b.index ?? 1e9));
-  const seen = new Set<string>();
+  const seen = new Set<string>(skip);
   const perCat = new Map<Category, number>();
   const out: Candidate[] = [];
   let stadium = false;
   for (const p of ranked) {
     const c = p.coordinates?.[0];
-    if (!c || !p.description || /^list of/i.test(p.title)) continue;
-    const kind = classifyDescription(p.description);
+    if (!c || /^list[ae]? (of|de)/i.test(p.title)) continue;
+    const kind = lang === 'en' ? (p.description ? classifyDescription(p.description) : null) : classifyPt(p.title, p.description);
     if (!kind) continue;
     const name = p.title.replace(/\s*\([^)]*\)$/, ''); // tira desambiguação: "Tower (Paris)"
     const key = p.pageprops?.wikibase_item ?? name.toLowerCase();
     if (seen.has(key) || seen.has(name.toLowerCase())) continue;
-    // limita cada categoria a um terço da lista (e estádios a um), para a votação ter variedade
+    // limita cada categoria (e estádios a um), para a votação ter variedade.
+    // Natureza fica fora do limite: em destino de ecoturismo ela é quase tudo.
     const used = perCat.get(kind.cat) ?? 0;
-    if (used >= Math.ceil(limit / 3)) continue;
-    if (/\b(stadium|arena)\b/i.test(p.description)) {
+    if (kind.cat !== 'natureza' && used >= Math.ceil(limit / 3)) continue;
+    if (/(^|\s)(stadium|arena|est[áa]dio)(\s|$)/i.test(words(`${p.title} ${p.description ?? ''}`))) {
       if (stadium) continue;
       stadium = true;
     }
@@ -185,21 +231,33 @@ export const pickPlaces = (pages: WikiPage[], limit = 24): Candidate[] => {
     seen.add(key);
     seen.add(name.toLowerCase());
     out.push({
-      id: `wp-${p.pageid}`,
+      id: `${lang === 'pt' ? 'wpp' : 'wp'}-${p.pageid}`,
       name,
       cat: kind.cat,
       lat: c.lat,
       lng: c.lon,
       dur: kind.dur,
       desc: GENERIC[kind.cat],
-      kind: p.description,
+      kind: lang === 'en' ? p.description : `${p.title} ${p.description ?? ''}`.trim(),
       img: p.thumbnail?.source,
-      wikiEn: p.title,
+      ...(lang === 'en' ? { wikiEn: p.title } : { wikiPt: p.title }),
       wikidata: p.pageprops?.wikibase_item,
     });
     if (out.length >= limit) break;
   }
   return out;
+};
+
+/** Junta as duas fontes: primeiro os da Wikipédia em inglês (melhor ranking), depois os só em português. */
+export const mergeSources = (en: WikiPage[], pt: WikiPage[], limit: number): Candidate[] => {
+  const first = pickPlaces(en, limit, 'en');
+  if (first.length >= limit) return first;
+  const taken = new Set<string>();
+  for (const c of first) {
+    if (c.wikidata) taken.add(c.wikidata);
+    taken.add(c.name.toLowerCase());
+  }
+  return [...first, ...pickPlaces(pt, limit - first.length, 'pt', taken)];
 };
 
 type WdEntity = {
@@ -220,7 +278,7 @@ export const applyWikidata = (places: Candidate[], entities: Record<string, WdEn
       ...p,
       name: label ? capitalize(label) : p.name,
       desc: desc ? `${capitalize(desc)}.` : p.desc,
-      wikiPt: e?.sitelinks?.ptwiki?.title,
+      wikiPt: e?.sitelinks?.ptwiki?.title ?? p.wikiPt,
     };
   });
 
@@ -236,10 +294,10 @@ export class PlacesError extends Error {
 const PAGE = 50;
 
 /** Uma página da busca geográfica, ordenada pelos artigos mais citados (os mais conhecidos). */
-const searchNear = async (lat: number, lng: number, km: number, offset: number): Promise<WikiPage[]> => {
+const searchNear = async (lang: 'en' | 'pt', lat: number, lng: number, km: number, offset: number): Promise<WikiPage[]> => {
   const search = encodeURIComponent(`nearcoord:${km}km,${lat},${lng}`);
   const res = await request(
-    `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrsearch=${search}` +
+    `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrsearch=${search}` +
       `&gsrlimit=${PAGE}&gsroffset=${offset}&gsrsort=incoming_links_desc&gsrnamespace=0` +
       `&prop=coordinates|description|pageprops|pageimages&ppprop=wikibase_item&colimit=${PAGE}` +
       `&piprop=thumbnail&pithumbsize=640&pilimit=${PAGE}`,
@@ -263,22 +321,32 @@ export const loadDestination = async (s: Suggestion, wanted = 16): Promise<Desti
   const limit = Math.min(80, Math.max(24, Math.ceil(wanted * 1.4)));
   const batchCount = limit > 40 ? 10 : 6;
   let candidates: Candidate[] = [];
-  // se a área for pequena e vier pouca coisa, amplia o raio uma vez
-  for (const km of [s.radiusKm, Math.min(25, Math.round(s.radiusKm * 2.5))]) {
-    let pages: WikiPage[];
+  let usedKm = s.radiusKm;
+  // Amplia o raio aos poucos. Os dois últimos passos (60 e 100 km) só entram quando o destino
+  // é pequeno e quase nada apareceu: é o caso de bases de ecoturismo, onde as atrações ficam longe.
+  const steps = [s.radiusKm, Math.min(25, Math.round(s.radiusKm * 2.5)), 60, 100];
+  for (let i = 0; i < steps.length; i++) {
+    const km = steps[i];
+    let en: WikiPage[];
+    let pt: WikiPage[] = [];
     try {
-      const batches = await Promise.all(
-        Array.from({ length: batchCount }, (_, i) => searchNear(s.lat, s.lng, km, i * PAGE)),
-      );
-      pages = batches.flat();
+      const [enBatches, ptBatches] = await Promise.all([
+        Promise.all(Array.from({ length: batchCount }, (_, b) => searchNear('en', s.lat, s.lng, km, b * PAGE))),
+        // a Wikipédia em português é complemento: se falhar, seguimos só com a em inglês
+        Promise.all(Array.from({ length: 4 }, (_, b) => searchNear('pt', s.lat, s.lng, km, b * PAGE))).catch(
+          () => [] as WikiPage[][],
+        ),
+      ]);
+      en = enBatches.flat();
+      pt = ptBatches.flat();
     } catch {
       throw new PlacesError('rede', 'Não foi possível buscar os lugares agora. Verifique a internet e tente de novo.');
     }
-    candidates = pickPlaces(pages, limit);
-    if (candidates.length >= Math.min(limit, Math.max(6, wanted))) break;
+    candidates = mergeSources(en, pt, limit);
+    usedKm = km;
+    const enough = i < 1 ? Math.min(limit, wanted) : 8;
+    if (candidates.length >= enough) break;
   }
-  if (candidates.length < 3)
-    throw new PlacesError('vazio', `Encontramos poucos lugares conhecidos em ${s.name}. Tente uma cidade maior por perto.`);
 
   // descrições em português são um extra: se o Wikidata falhar, seguimos com as genéricas
   const entities: Record<string, WdEntity> = {};
@@ -307,9 +375,67 @@ export const loadDestination = async (s: Suggestion, wanted = 16): Promise<Desti
     country: s.detail,
     lat: s.lat,
     lng: s.lng,
-    places: applyWikidata(candidates, entities),
+    radiusKm: usedKm,
+    places: applyWikidata(candidates, entities).map((p) => {
+      const far = distanceKm({ lat: s.lat, lng: s.lng }, p);
+      return far >= 3 ? { ...p, far: Math.round(far) } : p;
+    }),
   };
 };
+
+// ---------- Adicionar lugar por busca ----------
+
+export type SpotSuggestion = { key: string; name: string; detail: string; lat: number; lng: number; cat: Category };
+
+const spotCategory = (key?: string, value?: string): Category => {
+  if (key === 'tourism' && (value === 'museum' || value === 'gallery')) return 'museu';
+  if (key === 'tourism' && value === 'viewpoint') return 'mirante';
+  if (key === 'natural' && value === 'beach') return 'praia';
+  if (key === 'natural' && value === 'peak') return 'mirante';
+  if (key === 'natural' || key === 'waterway' || key === 'leisure') return 'natureza';
+  if (key === 'amenity' && /^(restaurant|cafe|fast_food|food_court|ice_cream|marketplace)$/.test(value ?? '')) return 'comida';
+  if (key === 'amenity' && /^(bar|pub|nightclub|theatre|cinema)$/.test(value ?? '')) return 'noite';
+  if (key === 'shop') return 'compras';
+  if (key === 'place') return 'bairro';
+  return 'monumento';
+};
+
+type PhotonSpot = { properties: PhotonFeature['properties'] & { street?: string; district?: string }; geometry: PhotonFeature['geometry'] };
+
+export const parseSpots = (features: PhotonSpot[]): SpotSuggestion[] => {
+  const seen = new Set<string>();
+  const out: SpotSuggestion[] = [];
+  for (const f of features) {
+    const p = f.properties;
+    const c = f.geometry?.coordinates;
+    if (!p?.name || !c || c.length < 2) continue;
+    const detail = [p.street, p.district, p.city, p.state]
+      .filter((x) => x && x !== p.name)
+      .slice(0, 2)
+      .join(', ');
+    const dedupe = `${p.name}|${detail}`.toLowerCase();
+    if (seen.has(dedupe)) continue;
+    seen.add(dedupe);
+    out.push({ key: `${p.osm_type ?? 'X'}${p.osm_id ?? dedupe}`, name: p.name, detail, lat: c[1], lng: c[0], cat: spotCategory(p.osm_key, p.osm_value) });
+  }
+  return out;
+};
+
+/** Busca qualquer lugar pelo nome (restaurante, cachoeira, pousada...), priorizando o entorno do destino. */
+export const suggestSpots = async (text: string, lat: number, lng: number, signal?: AbortSignal): Promise<SpotSuggestion[]> => {
+  const q = text.trim();
+  if (q.length < 3) return [];
+  const res = await request(
+    `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=8&lat=${lat}&lon=${lng}`,
+    { headers: { Accept: 'application/json' } },
+    8000,
+    signal,
+  );
+  if (!res.ok) throw new Error('Busca indisponível');
+  const data = (await res.json()) as { features?: PhotonSpot[] };
+  return parseSpots(data.features ?? []).slice(0, 6);
+};
+
 
 /** Texto do "ler mais": resumo do artigo da Wikipédia, em português quando existe. */
 export const loadMore = async (place: Pick<Place, 'wikiPt' | 'wikiEn'>): Promise<{ text: string; url: string } | null> => {

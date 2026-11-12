@@ -47,7 +47,8 @@ const CardFace = ({
         </Text>
         <View style={s.tags}>
           <Tag label={`cerca de ${durLabel(place.dur)}`} />
-          {profile.audience.slice(0, 2).map((a) => (
+          {place.far ? <Tag label={`a ${place.far} km do centro`} /> : null}
+          {profile.audience.slice(0, place.far ? 1 : 2).map((a) => (
             <Tag key={a} label={a} />
           ))}
         </View>

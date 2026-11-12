@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalog } from './fixtures';
-import { applyWikidata, classifyDescription, parseSuggestions, pickPlaces, type WikiPage } from '../src/lib/places';
+import { applyWikidata, classifyDescription, classifyPt, mergeSources, parseSpots, parseSuggestions, pickPlaces, type WikiPage } from '../src/lib/places';
 import { consensusLabel, memberProgress, rankPlaces } from '../src/lib/consensus';
 import { distanceKm, travel } from '../src/lib/geo';
 import { dayDistanceKm, generateItinerary, itineraryPlaces, optimizeRoute, scheduleDay } from '../src/lib/itinerary';
@@ -185,4 +185,43 @@ test('perfil do lugar: interesses, público e frase amigável', () => {
   assert.deepEqual(matchInterests({ cat: 'natureza' }, undefined), []);
   assert.ok(profileOf({ cat: 'comida' }).pitch.includes('comer bem'));
   assert.deepEqual(profileOf({ cat: 'monumento', kind: 'Football stadium in Salvador, Brazil' }).interests, ['esporte']);
+});
+
+test('destino pequeno: Wikipédia em português completa a lista, classificando pelo título', () => {
+  // títulos e descrições reais do entorno de Mucugê (Chapada Diamantina)
+  assert.equal(classifyPt('Cachoeira da Califórnia', "queda d'água localizada no Parque Nacional da Chapada Diamantina")?.cat, 'natureza');
+  assert.equal(classifyPt('Cachoeira da Piabinha')?.cat, 'natureza');
+  assert.equal(classifyPt('Gruna do Brejo', 'Gruta artificial localizada em Andaraí, Bahia')?.cat, 'natureza');
+  assert.equal(classifyPt('Rampa do Caim')?.cat, 'mirante');
+  assert.equal(classifyPt('Poço da Madalena')?.cat, 'natureza');
+  assert.equal(classifyPt('Rio Mucugê'), null);
+  assert.equal(classifyPt('Andaraí', 'município do Estado da Bahia, Brasil'), null);
+  assert.equal(classifyPt('Chapada Diamantina', 'região de chapadas localizada na Bahia, Brasil'), null);
+  assert.equal(classifyPt('Monte Santo', 'município do estado da Bahia'), null);
+  assert.equal(classifyPt('Mar de Espanha (Mucugê)'), null);
+
+  const pg = (pageid: number, index: number, title: string, description?: string, wd?: string): WikiPage => ({
+    pageid, index, title, description, coordinates: [{ lat: -13 - pageid / 1000, lon: -41.37 }], pageprops: wd ? { wikibase_item: wd } : undefined,
+  });
+  const en = [pg(1, 1, 'Mucugê', 'Municipality of Bahia, Brazil', 'Q1'), pg(2, 2, 'Chapada Diamantina National Park', 'National park in Bahia, Brazil', 'Q2')];
+  const pt = [
+    pg(11, 1, 'Parque Nacional da Chapada Diamantina', 'parque nacional brasileiro', 'Q2'),
+    pg(12, 2, 'Cachoeira da Piabinha', undefined, 'Q12'),
+    pg(13, 3, 'Rio Mucugê'),
+    pg(14, 4, 'Rampa do Caim'),
+  ];
+  const merged = mergeSources(en, pt, 24);
+  assert.deepEqual(merged.map((p) => p.name), ['Chapada Diamantina National Park', 'Cachoeira da Piabinha', 'Rampa do Caim']);
+  assert.deepEqual([merged[1].id, merged[1].wikiPt, merged[1].wikiEn], ['wpp-12', 'Cachoeira da Piabinha', undefined]);
+  assert.ok(profileOf(merged[1]).audience.includes('Banho de cachoeira'));
+});
+
+test('adicionar lugar: converte resultados da busca e sugere a categoria', () => {
+  const s = parseSpots([
+    { properties: { osm_type: 'N', osm_id: 5, osm_key: 'amenity', osm_value: 'restaurant', name: 'Sabor da Chapada', street: 'Rua Direita', city: 'Mucugê', state: 'Bahia' }, geometry: { coordinates: [-41.37, -13.0] } },
+    { properties: { osm_type: 'W', osm_id: 6, osm_key: 'waterway', osm_value: 'waterfall', name: 'Cachoeira do Tiburtino', city: 'Mucugê' }, geometry: { coordinates: [-41.36, -13.01] } },
+    { properties: { osm_key: 'amenity' }, geometry: { coordinates: [0, 0] } },
+  ]);
+  assert.deepEqual(s.map((x) => [x.name, x.cat, x.detail]), [['Sabor da Chapada', 'comida', 'Rua Direita, Mucugê'], ['Cachoeira do Tiburtino', 'natureza', 'Mucugê']]);
+  assert.equal(s[0].lat, -13.0);
 });

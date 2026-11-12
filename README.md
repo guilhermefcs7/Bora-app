@@ -39,12 +39,21 @@ Nenhuma chave de API e nenhum destino embutido. Serviços públicos e gratuitos:
 | Serviço | Uso |
 | --- | --- |
 | Photon (komoot, dados do OpenStreetMap) | Autocomplete de destinos enquanto você digita |
-| Wikipédia em inglês (busca geográfica `nearcoord`) | Lugares em volta do destino, ordenados pelos artigos mais citados |
+| Wikipédia em inglês e em português (busca geográfica `nearcoord`) | Lugares em volta do destino, ordenados pelos artigos mais citados. A em português completa a lista e cobre melhor destinos brasileiros |
 | Wikidata | Nome e descrição de cada lugar em português |
 | Wikipédia (resumo do artigo e miniatura) | Foto e texto do "Ler mais" |
 | OpenStreetMap + Leaflet | Mapa do dia no roteiro |
 
 São serviços abertos, sem garantia de disponibilidade e com limites de uso justo. Para uso pessoal funcionam bem; para publicar o app para muita gente, vale ter um servidor próprio no meio.
+
+### Destinos pequenos e de natureza
+
+Em bases de ecoturismo (Mucugê, na Chapada Diamantina, por exemplo) quase não há atrações dentro da cidade. O app trata isso assim:
+
+1. Amplia a busca em etapas: raio do destino, depois até 25 km, 60 km e 100 km, parando quando acha pelo menos 8 lugares.
+2. Avisa que a lista cobre a região e mostra em cada cartão a distância até o centro.
+3. Nunca bloqueia a criação da viagem. Se nada for encontrado, abre direto a busca para você adicionar lugares.
+4. "Adicionar lugar" busca qualquer ponto pelo nome perto do destino (cachoeira, restaurante, pousada) e usa a localização real no mapa e no roteiro.
 
 ## Ligar a sincronização entre aparelhos (opcional)
 

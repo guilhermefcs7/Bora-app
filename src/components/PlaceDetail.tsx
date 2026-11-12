@@ -67,6 +67,7 @@ export const PlaceDetail = ({ place, myInterests, onClose, onLoaded }: Props) =>
               <Text style={s.desc}>{place.desc}</Text>
               <View style={s.tags}>
                 <Tag label={`cerca de ${durLabel(place.dur)} de visita`} />
+                {place.far ? <Tag label={`a ${place.far} km do centro`} /> : null}
               </View>
 
               {matches.length > 0 && (

@@ -18,7 +18,7 @@ export const syncEnabled = () => client !== null;
 /** Parte da viagem compartilhada entre todos (membros e votos ficam em tabelas próprias). */
 type SharedData = Pick<
   Trip,
-  'id' | 'destination' | 'lat' | 'lng' | 'days' | 'pace' | 'perDay' | 'places' | 'itinerary' | 'checklist' | 'updatedAt'
+  'id' | 'destination' | 'lat' | 'lng' | 'days' | 'pace' | 'perDay' | 'searchKm' | 'places' | 'itinerary' | 'checklist' | 'updatedAt'
 >;
 
 const sharedOf = (t: Trip): SharedData => ({
@@ -29,6 +29,7 @@ const sharedOf = (t: Trip): SharedData => ({
   days: t.days,
   pace: t.pace,
   perDay: t.perDay,
+  searchKm: t.searchKm,
   places: t.places,
   itinerary: t.itinerary,
   checklist: t.checklist,

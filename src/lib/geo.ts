@@ -11,12 +11,14 @@ export const distanceKm = (a: LatLng, b: LatLng): number => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-/** Estimativa de deslocamento urbano: a pé até 1,5 km, depois transporte. */
-export const travel = (km: number): { minutes: number; mode: 'a pé' | 'de transporte' } => {
+/** Estimativa de deslocamento: a pé até 1,5 km, transporte urbano até 12 km, carro em estrada acima disso. */
+export const travel = (km: number): { minutes: number; mode: 'a pé' | 'de transporte' | 'de carro' } => {
   // ruas não são linha reta: fator 1,3 sobre a distância geodésica
   const real = km * 1.3;
   if (real <= 1.5) return { minutes: Math.max(2, Math.round((real / 4.8) * 60)), mode: 'a pé' };
-  return { minutes: Math.round((real / 18) * 60) + 8, mode: 'de transporte' };
+  if (real <= 12) return { minutes: Math.round((real / 18) * 60) + 8, mode: 'de transporte' };
+  return { minutes: Math.round((real / 45) * 60) + 10, mode: 'de carro' };
 };
 
-export const kmLabel = (km: number) => (km < 1 ? `${Math.round(km * 100) * 10} m` : `${km.toFixed(1).replace('.', ',')} km`);
+export const kmLabel = (km: number) =>
+  km < 1 ? `${Math.round(km * 100) * 10} m` : km >= 20 ? `${Math.round(km)} km` : `${km.toFixed(1).replace('.', ',')} km`;
