@@ -43,3 +43,12 @@ export const durLabel = (min: number) => {
   if (h === 0) return `${m} min`;
   return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, '0')}`;
 };
+
+export const MAX_PER_DAY = 12;
+
+/** Atividades por dia de uma viagem (viagens antigas guardam só o ritmo). */
+export const perDayOf = (t: { pace: Pace; perDay?: number }) => t.perDay ?? paceInfo[t.pace].perDay;
+
+export const paceLabel = (perDay: number) => (perDay <= 3 ? 'Leve' : perDay <= 5 ? 'Moderado' : 'Intenso');
+
+export const activitiesLabel = (n: number) => `${n} ${n === 1 ? 'atividade' : 'atividades'}`;

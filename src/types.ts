@@ -22,6 +22,15 @@ export type Place = {
   area?: string;
   desc: string;
   custom?: boolean;
+  /** foto do lugar (miniatura da Wikipédia) */
+  img?: string;
+  /** descrição curta original, em inglês; usada só para deduzir o perfil do lugar */
+  kind?: string;
+  /** títulos dos artigos na Wikipédia, para o "ler mais" */
+  wikiPt?: string;
+  wikiEn?: string;
+  /** texto do "ler mais", guardado depois da primeira leitura para abrir offline */
+  more?: string;
 };
 
 export type Destination = {
@@ -51,6 +60,8 @@ export type Trip = {
   lng: number;
   days: number;
   pace: Pace;
+  /** atividades por dia; viagens antigas só têm `pace` */
+  perDay?: number;
   places: Place[];
   members: Member[];
   /** ids dos membros criados neste aparelho */
@@ -65,6 +76,6 @@ export type Trip = {
   shared: boolean;
 };
 
-export type Profile = { id: string; name: string; color: string };
+export type Profile = { id: string; name: string; color: string; interests?: string[] };
 
 export type SavedPlace = Place & { destination: string };

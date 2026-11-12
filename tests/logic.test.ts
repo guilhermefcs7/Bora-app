@@ -6,6 +6,7 @@ import { consensusLabel, memberProgress, rankPlaces } from '../src/lib/consensus
 import { distanceKm, travel } from '../src/lib/geo';
 import { dayDistanceKm, generateItinerary, itineraryPlaces, optimizeRoute, scheduleDay } from '../src/lib/itinerary';
 import { mergeRemote } from '../src/lib/sync';
+import { profileOf, matchInterests } from '../src/lib/audience';
 import type { Trip } from '../src/types';
 
 const lisboa = catalog[0];
@@ -122,7 +123,7 @@ test('lugares: classifica pela descrição, mantém o ranking e aplica Wikidata'
   const picked = pickPlaces([
     pg(4, 4, 'Jardin du Luxembourg', 'Park in Paris, France', 'Q4'),
     pg(1, 1, 'Paris', 'Capital and largest city of France', 'Q90'),
-    pg(2, 2, 'Louvre', 'Art museum in Paris, France', 'Q19675'),
+    { ...pg(2, 2, 'Louvre', 'Art museum in Paris, France', 'Q19675'), thumbnail: { source: 'https://upload.wikimedia.org/x.jpg' } },
     pg(3, 3, 'Eiffel Tower', 'Tower in Paris, France', 'Q243'),
     pg(5, 5, 'University of Paris', 'Former university in Paris', 'Q5'),
     pg(6, 6, 'Gare du Nord', 'Railway station in Paris', 'Q6'),
@@ -134,15 +135,53 @@ test('lugares: classifica pela descrição, mantém o ranking e aplica Wikidata'
   assert.deepEqual(picked.map((p) => p.name), ['Louvre', 'Eiffel Tower', 'Jardin du Luxembourg', 'Pont Neuf']);
   assert.deepEqual(picked.map((p) => p.cat), ['museu', 'monumento', 'natureza', 'monumento']);
   assert.equal(picked[0].id, 'wp-2');
+  assert.deepEqual([picked[0].img, picked[0].kind, picked[0].wikiEn], ['https://upload.wikimedia.org/x.jpg', 'Art museum in Paris, France', 'Louvre']);
   assert.equal(classifyDescription('Avenue in Paris, France')?.cat, 'bairro');
   assert.equal(classifyDescription('Opera house in Paris')?.cat, 'noite');
   assert.equal(classifyDescription('French football club'), null);
   const done = applyWikidata(picked, {
-    Q243: { labels: { pt: { value: 'Torre Eiffel' } }, descriptions: { pt: { value: 'torre no Champ de Mars em Paris, França' } } },
+    Q243: { labels: { pt: { value: 'Torre Eiffel' } }, descriptions: { pt: { value: 'torre no Champ de Mars em Paris, França' } }, sitelinks: { ptwiki: { title: 'Torre Eiffel' } } },
     Q4: { descriptions: { en: { value: 'park in Paris' } } },
   });
   assert.deepEqual([done[1].name, done[1].desc], ['Torre Eiffel', 'Torre no Champ de Mars em Paris, França.']);
   assert.equal(done[2].desc, 'Park in Paris.');
+  assert.equal(done[1].wikiPt, 'Torre Eiffel');
   assert.equal(done[0].desc, 'Museu ou galeria conhecido na região.');
   assert.equal('wikidata' in done[0], false);
+});
+
+test('roteiro: espalha as atividades por todos os dias, sem dia vazio', () => {
+  const t = { ...baseTrip(), days: 5, perDay: 4 };
+  t.votes = { a: Object.fromEntries(t.places.map((p) => [p.id, 1 as const])) }; // 14 lugares aprovados
+  const it = generateItinerary(t);
+  const sizes = it.map((d) => d.length);
+  assert.equal(it.length, 5);
+  assert.equal(sizes.reduce((a, b) => a + b, 0), 14);
+  assert.ok(Math.min(...sizes) >= 2, `dias: ${sizes}`);
+  assert.ok(Math.max(...sizes) - Math.min(...sizes) <= 1, `dias: ${sizes}`);
+});
+
+test('roteiro: com menos lugares que dias, os dias livres ficam intercalados', () => {
+  const t = { ...baseTrip(), days: 5, perDay: 4 };
+  t.votes = { a: Object.fromEntries(t.places.slice(0, 3).map((p) => [p.id, 1 as const])) };
+  const sizes = generateItinerary(t).map((d) => d.length);
+  assert.deepEqual(sizes, [1, 0, 1, 0, 1]);
+});
+
+test('roteiro: respeita mais de 6 atividades por dia', () => {
+  const t = { ...baseTrip(), days: 1, perDay: 9 };
+  t.votes = { a: Object.fromEntries(t.places.map((p) => [p.id, 1 as const])) };
+  assert.equal(generateItinerary(t)[0].length, 9);
+});
+
+test('perfil do lugar: interesses, público e frase amigável', () => {
+  const museum = profileOf({ cat: 'museu', kind: 'Art museum in Paris, France' });
+  assert.deepEqual(museum.interests.slice(0, 2), ['arte', 'historia']);
+  assert.ok(museum.pitch.startsWith('Pode encaixar bem se você gosta de arte e história.'));
+  assert.ok(museum.audience.includes('Quem gosta de arte') && museum.audience.includes('Dia de chuva'));
+  const church = profileOf({ cat: 'monumento', kind: 'Catholic cathedral in Salvador, Brazil' });
+  assert.ok(church.audience.includes('Quem busca um momento de calma'));
+  assert.deepEqual(matchInterests({ cat: 'natureza', kind: 'Park in Dublin' }, ['familia', 'compras']), ['familia']);
+  assert.deepEqual(matchInterests({ cat: 'natureza' }, undefined), []);
+  assert.ok(profileOf({ cat: 'comida' }).pitch.includes('comer bem'));
 });

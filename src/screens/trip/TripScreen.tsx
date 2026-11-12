@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { PlaceDetail } from '../../components/PlaceDetail';
 import { Avatar, Button, Card, H2, Header, IconButton } from '../../components/ui';
 import { generateItinerary } from '../../lib/itinerary';
 import { useNav } from '../../nav';
 import { useStore } from '../../store';
-import { colors } from '../../theme';
+import { activitiesLabel, colors, perDayOf } from '../../theme';
 import { ChecklistTab } from './ChecklistTab';
 import { GroupTab } from './GroupTab';
 import { ItineraryTab } from './ItineraryTab';
@@ -26,6 +27,7 @@ export const TripScreen = ({ id, initialTab }: { id: string; initialTab?: Tab })
   const [voterId, setVoterId] = useState(profile.id);
   const [picking, setPicking] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   useEffect(() => watchTrip(id), [id, watchTrip]);
 
@@ -49,7 +51,7 @@ export const TripScreen = ({ id, initialTab }: { id: string; initialTab?: Tab })
     <View style={{ flex: 1 }}>
       <Header
         title={trip.destination}
-        subtitle={`${trip.days} ${trip.days === 1 ? 'dia' : 'dias'} · ${trip.members.length} ${trip.members.length === 1 ? 'pessoa' : 'pessoas'}`}
+        subtitle={`${trip.days} ${trip.days === 1 ? 'dia' : 'dias'} · ${activitiesLabel(perDayOf(trip))} por dia · ${trip.members.length} ${trip.members.length === 1 ? 'pessoa' : 'pessoas'}`}
         onBack={nav.back}
         right={<IconButton icon="trash" label="Excluir viagem" onPress={() => setConfirmDelete(true)} color={colors.muted} />}
       />
@@ -111,12 +113,27 @@ export const TripScreen = ({ id, initialTab }: { id: string; initialTab?: Tab })
 
       <View style={{ flex: 1 }}>
         {tab === 'votar' && (
-          <VoteTab trip={trip} voterId={activeVoter} onPickVoter={() => setPicking((p) => !p)} onDone={() => setTab('grupo')} />
+          <VoteTab
+            trip={trip}
+            voterId={activeVoter}
+            onPickVoter={() => setPicking((p) => !p)}
+            onDone={() => setTab('grupo')}
+            onMore={(p) => setDetailId(p.id)}
+          />
         )}
         {tab === 'grupo' && <GroupTab trip={trip} onGenerate={generate} />}
-        {tab === 'roteiro' && <ItineraryTab trip={trip} onGenerate={generate} onVote={() => setTab('votar')} />}
+        {tab === 'roteiro' && <ItineraryTab trip={trip} onGenerate={generate} onVote={() => setTab('votar')} onMore={(p) => setDetailId(p.id)} />}
         {tab === 'checklist' && <ChecklistTab trip={trip} />}
       </View>
+
+      <PlaceDetail
+        place={trip.places.find((p) => p.id === detailId) ?? null}
+        myInterests={profile.interests}
+        onClose={() => setDetailId(null)}
+        onLoaded={(placeId, text) =>
+          updateTrip(trip.id, (t) => ({ ...t, places: t.places.map((p) => (p.id === placeId ? { ...p, more: text } : p)) }))
+        }
+      />
     </View>
   );
 };

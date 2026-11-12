@@ -116,6 +116,7 @@ export type WikiPage = {
   description?: string;
   coordinates?: { lat: number; lon: number }[];
   pageprops?: { wikibase_item?: string };
+  thumbnail?: { source: string; width?: number; height?: number };
 };
 
 // A descrição curta da Wikipédia em inglês ("Art museum in Paris, France") diz o que o lugar é.
@@ -191,6 +192,9 @@ export const pickPlaces = (pages: WikiPage[], limit = 24): Candidate[] => {
       lng: c.lon,
       dur: kind.dur,
       desc: GENERIC[kind.cat],
+      kind: p.description,
+      img: p.thumbnail?.source,
+      wikiEn: p.title,
       wikidata: p.pageprops?.wikibase_item,
     });
     if (out.length >= limit) break;
@@ -201,6 +205,7 @@ export const pickPlaces = (pages: WikiPage[], limit = 24): Candidate[] => {
 type WdEntity = {
   labels?: Record<string, { value: string }>;
   descriptions?: Record<string, { value: string }>;
+  sitelinks?: Record<string, { title: string }>;
 };
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -215,6 +220,7 @@ export const applyWikidata = (places: Candidate[], entities: Record<string, WdEn
       ...p,
       name: label ? capitalize(label) : p.name,
       desc: desc ? `${capitalize(desc)}.` : p.desc,
+      wikiPt: e?.sitelinks?.ptwiki?.title,
     };
   });
 
@@ -235,7 +241,8 @@ const searchNear = async (lat: number, lng: number, km: number, offset: number):
   const res = await request(
     `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrsearch=${search}` +
       `&gsrlimit=${PAGE}&gsroffset=${offset}&gsrsort=incoming_links_desc&gsrnamespace=0` +
-      `&prop=coordinates|description|pageprops&ppprop=wikibase_item&colimit=${PAGE}`,
+      `&prop=coordinates|description|pageprops|pageimages&ppprop=wikibase_item&colimit=${PAGE}` +
+      `&piprop=thumbnail&pithumbsize=640&pilimit=${PAGE}`,
     undefined,
     12000,
   );
@@ -247,39 +254,52 @@ const searchNear = async (lat: number, lng: number, km: number, offset: number):
     .map((p, i) => ({ ...p, index: offset + i + 1 }));
 };
 
-/** Busca os lugares do destino escolhido no autocomplete. */
-export const loadDestination = async (s: Suggestion): Promise<Destination> => {
+/**
+ * Busca os lugares do destino escolhido no autocomplete.
+ * `wanted` = quantos lugares a viagem precisa (dias × atividades por dia).
+ */
+export const loadDestination = async (s: Suggestion, wanted = 16): Promise<Destination> => {
+  // margem para a votação recusar parte dos lugares
+  const limit = Math.min(80, Math.max(24, Math.ceil(wanted * 1.4)));
+  const batchCount = limit > 40 ? 10 : 6;
   let candidates: Candidate[] = [];
   // se a área for pequena e vier pouca coisa, amplia o raio uma vez
   for (const km of [s.radiusKm, Math.min(25, Math.round(s.radiusKm * 2.5))]) {
     let pages: WikiPage[];
     try {
-      const batches = await Promise.all([0, 1, 2, 3, 4, 5].map((i) => searchNear(s.lat, s.lng, km, i * PAGE)));
+      const batches = await Promise.all(
+        Array.from({ length: batchCount }, (_, i) => searchNear(s.lat, s.lng, km, i * PAGE)),
+      );
       pages = batches.flat();
     } catch {
       throw new PlacesError('rede', 'Não foi possível buscar os lugares agora. Verifique a internet e tente de novo.');
     }
-    candidates = pickPlaces(pages);
-    if (candidates.length >= 6) break;
+    candidates = pickPlaces(pages, limit);
+    if (candidates.length >= Math.min(limit, Math.max(6, wanted))) break;
   }
   if (candidates.length < 3)
     throw new PlacesError('vazio', `Encontramos poucos lugares conhecidos em ${s.name}. Tente uma cidade maior por perto.`);
 
   // descrições em português são um extra: se o Wikidata falhar, seguimos com as genéricas
-  let entities: Record<string, WdEntity> = {};
+  const entities: Record<string, WdEntity> = {};
   const ids = candidates.map((c) => c.wikidata).filter((x): x is string => !!x && /^Q\d+$/.test(x));
-  if (ids.length) {
-    try {
-      const res = await request(
-        `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${ids.slice(0, 50).join('|')}&props=labels|descriptions&languages=pt|en&format=json&origin=*`,
-        undefined,
-        10000,
-      );
-      if (res.ok) entities = ((await res.json()) as { entities?: Record<string, WdEntity> }).entities ?? {};
-    } catch {
-      // segue sem descrições
-    }
-  }
+  // o Wikidata aceita 50 ids por chamada
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      try {
+        const res = await request(
+          `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${chunk.join('|')}&props=labels|descriptions|sitelinks&sitefilter=ptwiki&languages=pt|en&format=json&origin=*`,
+          undefined,
+          10000,
+        );
+        if (res.ok) Object.assign(entities, ((await res.json()) as { entities?: Record<string, WdEntity> }).entities ?? {});
+      } catch {
+        // segue sem descrições
+      }
+    }),
+  );
 
   return {
     id: s.key,
@@ -290,3 +310,34 @@ export const loadDestination = async (s: Suggestion): Promise<Destination> => {
     places: applyWikidata(candidates, entities),
   };
 };
+
+/** Texto do "ler mais": resumo do artigo da Wikipédia, em português quando existe. */
+export const loadMore = async (place: Pick<Place, 'wikiPt' | 'wikiEn'>): Promise<{ text: string; url: string } | null> => {
+  for (const [lang, title] of [
+    ['pt', place.wikiPt],
+    ['en', place.wikiEn],
+  ] as const) {
+    if (!title) continue;
+    try {
+      const res = await request(
+        `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`,
+        { headers: { Accept: 'application/json' } },
+        10000,
+      );
+      if (!res.ok) continue;
+      const data = (await res.json()) as { extract?: string; content_urls?: { desktop?: { page?: string } } };
+      if (data.extract && data.extract.length > 40)
+        return { text: data.extract, url: data.content_urls?.desktop?.page ?? `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(title)}` };
+    } catch {
+      // tenta o próximo idioma
+    }
+  }
+  return null;
+};
+
+export const wikiUrl = (place: Pick<Place, 'wikiPt' | 'wikiEn'>): string | null =>
+  place.wikiPt
+    ? `https://pt.wikipedia.org/wiki/${encodeURIComponent(place.wikiPt.replace(/ /g, '_'))}`
+    : place.wikiEn
+      ? `https://en.wikipedia.org/wiki/${encodeURIComponent(place.wikiEn.replace(/ /g, '_'))}`
+      : null;

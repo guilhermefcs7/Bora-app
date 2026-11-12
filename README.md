@@ -23,23 +23,26 @@ Se o Expo Go reclamar da versão do SDK, atualize o Expo Go.
 
 | Área | Funcionalidade |
 | --- | --- |
-| Viagens | Criar com destino, dias (1 a 14) e ritmo; listar; excluir |
+| Viagens | Criar com destino, dias (1 a 14) e atividades por dia (1 a 12); listar; excluir |
 | Destinos | Campo com autocomplete: digite e escolha qualquer cidade ou região do mundo. Os lugares do destino são buscados na hora, do mais ao menos conhecido, com nome e descrição em português quando existem |
 | Votação | Swipe: direita bora, esquerda passo, para cima imperdível. Botões equivalentes, desfazer, filtro por categoria, adicionar lugar manual |
 | Grupo | Código de convite, progresso de cada pessoa, ranking de consenso. Modo "passa o celular" para várias pessoas no mesmo aparelho |
-| Roteiro | Geração automática por votos + proximidade, horários e deslocamentos estimados, mover, trocar de dia, remover, otimizar dia, abrir no app de mapas, compartilhar como texto |
+| Lugares | Foto, frase "pode encaixar bem se você gosta de…", público recomendado e "Ler mais" com o resumo da Wikipédia. Interesses do perfil destacam os lugares que combinam |
+| Roteiro | Atividades espalhadas por todos os dias, agrupadas por proximidade; mapa real do dia (OpenStreetMap); horários e deslocamentos estimados; mover para qualquer dia, reordenar, remover, otimizar, abrir no app de mapas, compartilhar como texto |
 | Extras | Checklist da viagem, lugares salvos, perfil com nome e cor |
 | Offline | Viagens já criadas ficam no aparelho: votar, ver e editar o roteiro funcionam sem rede. Criar viagem precisa de internet |
 
 ## De onde vêm os dados
 
-Nenhuma chave de API e nenhum destino embutido. Três serviços públicos e gratuitos:
+Nenhuma chave de API e nenhum destino embutido. Serviços públicos e gratuitos:
 
 | Serviço | Uso |
 | --- | --- |
 | Photon (komoot, dados do OpenStreetMap) | Autocomplete de destinos enquanto você digita |
 | Wikipédia em inglês (busca geográfica `nearcoord`) | Lugares em volta do destino, ordenados pelos artigos mais citados |
 | Wikidata | Nome e descrição de cada lugar em português |
+| Wikipédia (resumo do artigo e miniatura) | Foto e texto do "Ler mais" |
+| OpenStreetMap + Leaflet | Mapa do dia no roteiro |
 
 São serviços abertos, sem garantia de disponibilidade e com limites de uso justo. Para uso pessoal funcionam bem; para publicar o app para muita gente, vale ter um servidor próprio no meio.
 
@@ -102,7 +105,8 @@ src/lib/itinerary.ts       geração do roteiro, otimização de rota, horários
 src/lib/places.ts          autocomplete de destinos e busca dos lugares
 src/lib/sync.ts            Supabase (opcional)
 src/store.tsx              estado, persistência e sincronização
-src/components/            SwipeDeck, RouteMap, ícones e UI
+src/lib/audience.ts        perfil do lugar: interesses, público e frase
+src/components/            SwipeDeck, DayMap, PlaceDetail, ícones e UI
 src/screens/               telas
 supabase/schema.sql        tabelas e políticas
 tests/                     testes
@@ -114,5 +118,6 @@ tests/                     testes
 - Lugares adicionados manualmente entram com a coordenada do centro do destino.
 - Os lugares vêm de artigos da Wikipédia perto do destino, classificados pela descrição curta. Restaurantes e bares quase não aparecem; dá para adicionar à mão. Às vezes entra um item fora do lugar (um bairro, um estádio).
 - Duração de visita é estimativa por categoria. Não há preço nem horário de funcionamento.
-- O mapa do roteiro é um desenho da rota, sem mapa de fundo; o botão "Abrir no mapa" leva ao app de mapas.
+- O mapa do roteiro precisa de internet; sem ela aparece um desenho simples da rota. O traçado liga as paradas em linha reta, não segue as ruas.
+- "Para quem é" e a frase de cada lugar são geradas por regras (categoria + palavras da descrição), não por IA: são sugestões, não curadoria.
 - Sem importação de Instagram/TikTok, PDF ou calendário nesta versão.

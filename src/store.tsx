@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { load, save, uid, inviteCode } from './lib/storage';
 import { mergeRemote, pullTrip, pushTrip, subscribeTrip, syncEnabled } from './lib/sync';
 import { memberColors } from './theme';
-import type { Destination, Pace, Place, Profile, SavedPlace, Trip } from './types';
+import type { Destination, Place, Profile, SavedPlace, Trip } from './types';
 
 export type SyncStatus = 'local' | 'syncing' | 'ok' | 'offline';
 
@@ -11,7 +11,7 @@ type Store = {
   profile: Profile;
   setProfile: (p: Partial<Profile>) => void;
   trips: Trip[];
-  createTrip: (input: { destination: Destination; days: number; pace: Pace }) => Trip;
+  createTrip: (input: { destination: Destination; days: number; perDay: number }) => Trip;
   joinTrip: (code: string) => Promise<Trip>;
   /** touch = true quando muda dado compartilhado (lugares, roteiro, checklist) */
   updateTrip: (id: string, fn: (t: Trip) => Trip, touch?: boolean) => void;
@@ -121,7 +121,7 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const createTrip = useCallback<Store['createTrip']>(
-    ({ destination, days, pace }) => {
+    ({ destination, days, perDay }) => {
       const trip: Trip = {
         id: uid(),
         code: inviteCode(),
@@ -129,7 +129,8 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
         lat: destination.lat,
         lng: destination.lng,
         days,
-        pace,
+        pace: perDay <= 3 ? 'leve' : perDay <= 5 ? 'moderado' : 'intenso',
+        perDay,
         places: destination.places,
         members: [{ id: profile.id, name: profile.name || 'Você', color: profile.color }],
         localMemberIds: [profile.id],

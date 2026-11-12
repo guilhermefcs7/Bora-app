@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Icon } from '../components/Icon';
-import { Avatar, Button, Card, H1, H2, IconButton, Progress, Tag, headingFont } from '../components/ui';
+import { Avatar, Button, Card, Chip, H1, H2, IconButton, Progress, Tag, headingFont } from '../components/ui';
 import { memberProgress } from '../lib/consensus';
 import { syncEnabled } from '../lib/sync';
 import { useNav } from '../nav';
 import { useStore } from '../store';
-import { catInfo, colors, memberColors, paceInfo } from '../theme';
+import { allInterests, interestInfo } from '../lib/audience';
+import { activitiesLabel, catInfo, colors, memberColors, perDayOf } from '../theme';
 import type { Trip } from '../types';
 
 const bannerColors = [colors.ink, colors.teal, colors.blue, '#7C3AED', '#BE185D'];
@@ -19,7 +20,7 @@ const TripCard = ({ trip, index, meId, onOpen }: { trip: Trip; index: number; me
         <View style={[s.banner, { backgroundColor: bannerColors[index % bannerColors.length] }]}>
           <Text style={s.bannerTitle}>{trip.destination}</Text>
           <Text style={s.bannerSub}>
-            {trip.days} {trip.days === 1 ? 'dia' : 'dias'} · ritmo {paceInfo[trip.pace].label.toLowerCase()}
+            {trip.days} {trip.days === 1 ? 'dia' : 'dias'} · {activitiesLabel(perDayOf(trip))} por dia
           </Text>
         </View>
         <View style={s.cardBody}>
@@ -55,6 +56,7 @@ const TripCard = ({ trip, index, meId, onOpen }: { trip: Trip; index: number; me
 const Welcome = () => {
   const { setProfile } = useStore();
   const [name, setName] = useState('');
+  const [interests, setInterests] = useState<string[]>([]);
   return (
     <View style={s.welcome}>
       <Text style={s.logo}>Bora</Text>
@@ -70,9 +72,19 @@ const Welcome = () => {
         style={s.input}
         maxLength={20}
         returnKeyType="done"
-        onSubmitEditing={() => name.trim() && setProfile({ name: name.trim() })}
       />
-      <Button label="Começar" disabled={!name.trim()} onPress={() => setProfile({ name: name.trim() })} />
+      <Text style={s.label}>O que você curte em viagem? (opcional)</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {allInterests.map((i) => (
+          <Chip
+            key={i}
+            label={interestInfo[i].label}
+            active={interests.includes(i)}
+            onPress={() => setInterests((cur) => (cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i]))}
+          />
+        ))}
+      </View>
+      <Button label="Começar" disabled={!name.trim()} onPress={() => setProfile({ name: name.trim(), interests })} />
     </View>
   );
 };
@@ -175,6 +187,27 @@ export const HomeScreen = () => {
                 ))}
               </View>
             </Card>
+            <Card style={{ padding: 16, gap: 10 }}>
+              <H2>Seus interesses</H2>
+              <Text style={s.lead}>Marque o que você curte. Os lugares que combinam aparecem destacados na votação.</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {allInterests.map((i) => {
+                  const on = (profile.interests ?? []).includes(i);
+                  return (
+                    <Chip
+                      key={i}
+                      label={interestInfo[i].label}
+                      active={on}
+                      onPress={() =>
+                        setProfile({
+                          interests: on ? (profile.interests ?? []).filter((x) => x !== i) : [...(profile.interests ?? []), i],
+                        })
+                      }
+                    />
+                  );
+                })}
+              </View>
+            </Card>
             <Card style={{ padding: 16, gap: 8 }}>
               <H2>Sincronização do grupo</H2>
               <Tag label={syncEnabled() ? 'Supabase conectado' : 'Modo local'} />
@@ -233,7 +266,7 @@ const s = StyleSheet.create({
   tabText: { fontSize: 13, fontWeight: '500', color: colors.muted },
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
   savedIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  welcome: { flex: 1, padding: 24, justifyContent: 'center', gap: 14 },
+  welcome: { flex: 1, padding: 24, justifyContent: 'center', gap: 12 },
   logo: { fontFamily: headingFont, fontSize: 22, fontWeight: '700', color: colors.accent },
   label: { fontSize: 14, fontWeight: '600', color: colors.ink },
   input: {

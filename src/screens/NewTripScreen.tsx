@@ -4,8 +4,7 @@ import { Button, Header } from '../components/ui';
 import { PlacesError, loadDestination, suggestDestinations, type Suggestion } from '../lib/places';
 import { useNav } from '../nav';
 import { useStore } from '../store';
-import { colors, paceInfo } from '../theme';
-import type { Pace } from '../types';
+import { MAX_PER_DAY, activitiesLabel, colors, paceLabel } from '../theme';
 
 type SearchState = 'idle' | 'searching' | 'done' | 'error';
 
@@ -17,7 +16,7 @@ export const NewTripScreen = () => {
   const [search, setSearch] = useState<SearchState>('idle');
   const [selected, setSelected] = useState<Suggestion | null>(null);
   const [days, setDays] = useState(3);
-  const [pace, setPace] = useState<Pace>('moderado');
+  const [perDay, setPerDay] = useState(4);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const alive = useRef(true);
@@ -62,9 +61,9 @@ export const NewTripScreen = () => {
     setError('');
     setBusy(true);
     try {
-      const destination = await loadDestination(selected);
+      const destination = await loadDestination(selected, days * perDay);
       if (!alive.current) return;
-      const trip = createTrip({ destination, days, pace });
+      const trip = createTrip({ destination, days, perDay });
       nav.replace({ name: 'trip', id: trip.id });
     } catch (e) {
       if (!alive.current) return;
@@ -153,21 +152,44 @@ export const NewTripScreen = () => {
         </View>
 
         <View style={s.block}>
-          <Text style={s.label}>Ritmo</Text>
+          <Text style={s.label}>Quantas atividades por dia?</Text>
+          <View style={s.stepper}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Menos uma atividade por dia" disabled={perDay <= 1} onPress={() => setPerDay((n) => n - 1)} style={[s.stepBtn, perDay <= 1 && { opacity: 0.4 }]}>
+              <Text style={s.stepSign}>−</Text>
+            </Pressable>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={s.stepValue}>{activitiesLabel(perDay)}</Text>
+              <Text style={s.hint}>Ritmo {paceLabel(perDay).toLowerCase()}</Text>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Mais uma atividade por dia" disabled={perDay >= MAX_PER_DAY} onPress={() => setPerDay((n) => n + 1)} style={[s.stepBtn, perDay >= MAX_PER_DAY && { opacity: 0.4 }]}>
+              <Text style={s.stepSign}>+</Text>
+            </Pressable>
+          </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            {(Object.keys(paceInfo) as Pace[]).map((p) => (
+            {(
+              [
+                ['Leve', 3],
+                ['Moderado', 4],
+                ['Intenso', 6],
+              ] as const
+            ).map(([label, n]) => (
               <Pressable
-                key={p}
+                key={label}
                 accessibilityRole="button"
-                accessibilityState={{ selected: pace === p }}
-                onPress={() => setPace(p)}
-                style={[s.pace, pace === p && s.paceOn]}
+                accessibilityLabel={`${label}: ${activitiesLabel(n)} por dia`}
+                accessibilityState={{ selected: perDay === n }}
+                onPress={() => setPerDay(n)}
+                style={[s.pace, perDay === n && s.paceOn]}
               >
-                <Text style={[s.paceTitle, pace === p && { fontWeight: '700' }]}>{paceInfo[p].label}</Text>
-                <Text style={s.hint}>{paceInfo[p].perDay} por dia</Text>
+                <Text style={[s.paceTitle, perDay === n && { fontWeight: '700' }]}>{label}</Text>
+                <Text style={s.hint}>{activitiesLabel(n)}</Text>
               </Pressable>
             ))}
           </View>
+          <Text style={s.hint}>
+            Até {days * perDay} atividades em {days} {days === 1 ? 'dia' : 'dias'}.
+            {perDay > 6 ? ' Acima de 6 por dia o roteiro fica corrido: sobra pouco tempo em cada lugar.' : ''}
+          </Text>
         </View>
       </ScrollView>
       <View style={s.footer}>
@@ -217,7 +239,7 @@ const s = StyleSheet.create({
   },
   stepBtn: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   stepSign: { fontSize: 24, color: colors.ink },
-  stepValue: { fontSize: 26, fontWeight: '700', color: colors.ink },
+  stepValue: { fontSize: 22, fontWeight: '700', color: colors.ink },
   pace: {
     flex: 1,
     height: 64,

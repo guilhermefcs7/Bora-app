@@ -7,10 +7,10 @@ import { useStore } from '../../store';
 import { catInfo, colors } from '../../theme';
 import type { Category, Place, Trip, VoteValue } from '../../types';
 
-type Props = { trip: Trip; voterId: string; onPickVoter: () => void; onDone: () => void };
+type Props = { trip: Trip; voterId: string; onPickVoter: () => void; onDone: () => void; onMore: (p: Place) => void };
 
-export const VoteTab = ({ trip, voterId, onPickVoter, onDone }: Props) => {
-  const { updateTrip, saved, toggleSaved } = useStore();
+export const VoteTab = ({ trip, voterId, onPickVoter, onDone, onMore }: Props) => {
+  const { updateTrip, saved, toggleSaved, profile } = useStore();
   const deck = useRef<SwipeCardHandle>(null);
   const [filter, setFilter] = useState<Category | null>(null);
   const [history, setHistory] = useState<{ voter: string; place: string }[]>([]);
@@ -115,7 +115,15 @@ export const VoteTab = ({ trip, voterId, onPickVoter, onDone }: Props) => {
 
       {current ? (
         <>
-          <SwipeDeck ref={deck} current={current} next={remaining[1]} approversOf={approversOf} onVote={vote} />
+          <SwipeDeck
+            ref={deck}
+            current={current}
+            next={remaining[1]}
+            myInterests={voter.id === profile.id ? profile.interests : undefined}
+            approversOf={approversOf}
+            onMore={onMore}
+            onVote={vote}
+          />
           <View style={s.actions}>
             <IconButton icon="undo" label="Desfazer último voto" onPress={undo} size={48} color={colors.muted} disabled={history.length === 0} />
             <IconButton icon="x" label="Passo" onPress={() => deck.current?.fling(-1)} size={68} border={colors.ink} iconSize={28} />

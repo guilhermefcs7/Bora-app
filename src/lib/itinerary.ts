@@ -1,4 +1,4 @@
-import { paceInfo } from '../theme';
+import { perDayOf } from '../theme';
 import type { Place, Trip } from '../types';
 import { rankPlaces } from './consensus';
 import { distanceKm, travel } from './geo';
@@ -49,8 +49,9 @@ export const optimizeRoute = (stops: Place[]): Place[] => {
 };
 
 /** Divide os lugares escolhidos em dias, juntando os que ficam perto. */
-const clusterByDay = (chosen: Place[], days: number, perDay: number): Place[][] => {
-  const k = Math.min(days, Math.max(1, Math.ceil(chosen.length / perDay)));
+const clusterByDay = (chosen: Place[], days: number): Place[][] => {
+  // usa todos os dias da viagem: espalha as atividades em vez de lotar os primeiros dias
+  const k = Math.min(days, chosen.length);
   if (k === 1) return [chosen];
   // sementes: pontos mais distantes entre si
   const seeds: Place[] = [chosen[0]];
@@ -66,7 +67,10 @@ const clusterByDay = (chosen: Place[], days: number, perDay: number): Place[][] 
     }
     seeds.push(far);
   }
-  const cap = Math.ceil(chosen.length / k);
+  // dias equilibrados: a diferença entre o dia mais cheio e o mais vazio é de no máximo 1
+  const base = Math.floor(chosen.length / k);
+  const extra = chosen.length % k;
+  const caps = seeds.map((_, i) => base + (i < extra ? 1 : 0));
   const groups: Place[][] = seeds.map(() => []);
   // atribui primeiro quem tem preferência mais forte por uma semente
   const pending = chosen
@@ -77,22 +81,24 @@ const clusterByDay = (chosen: Place[], days: number, perDay: number): Place[][] 
     .sort((a, b) => b.regret - a.regret);
   for (const { p } of pending) {
     const order = seeds.map((s, i) => ({ i, d: distanceKm(s, p) })).sort((a, b) => a.d - b.d);
-    const slot = order.find((o) => groups[o.i].length < cap) ?? order[0];
+    const slot = order.find((o) => groups[o.i].length < caps[o.i]) ?? order[0];
     groups[slot.i].push(p);
   }
   return groups.filter((g) => g.length > 0);
 };
 
 /** Gera o roteiro: escolhe os mais votados, agrupa por proximidade e ordena cada dia. */
-export const generateItinerary = (trip: Pick<Trip, 'places' | 'members' | 'votes' | 'days' | 'pace'>): string[][] => {
-  const perDay = paceInfo[trip.pace].perDay;
+export const generateItinerary = (
+  trip: Pick<Trip, 'places' | 'members' | 'votes' | 'days' | 'pace' | 'perDay'>,
+): string[][] => {
+  const perDay = perDayOf(trip);
   const ranked = rankPlaces(trip);
   const approved = ranked.filter((r) => r.points > 0);
   // sem nenhum voto positivo, usa os lugares ainda não votados para não devolver roteiro vazio
   const pool = approved.length > 0 ? approved : ranked.filter((r) => r.voters === 0);
   const chosen = pool.slice(0, trip.days * perDay).map((r) => r.place);
   if (chosen.length === 0) return Array.from({ length: trip.days }, () => []);
-  const groups = clusterByDay(chosen, trip.days, perDay).map(optimizeRoute);
+  const groups = clusterByDay(chosen, trip.days).map(optimizeRoute);
   // dias com mais pontos do grupo primeiro
   const score = new Map(ranked.map((r) => [r.place.id, r.points]));
   groups.sort(
@@ -101,8 +107,22 @@ export const generateItinerary = (trip: Pick<Trip, 'places' | 'members' | 'votes
       a.reduce((s, p) => s + (score.get(p.id) ?? 0), 0) / a.length,
   );
   const out = groups.map((g) => g.map((p) => p.id));
-  while (out.length < trip.days) out.push([]);
-  return out;
+  // só sobra dia vazio quando há menos lugares aprovados do que dias: intercala os livres
+  // entre os dias com passeio, em vez de deixar todos no fim
+  const empty = trip.days - out.length;
+  if (empty <= 0) return out;
+  const spread: string[][] = [];
+  const every = out.length / (empty + 1);
+  let placed = 0;
+  out.forEach((day, i) => {
+    spread.push(day);
+    if (placed < empty && i + 1 >= Math.round(every * (placed + 1)) && i < out.length - 1) {
+      spread.push([]);
+      placed++;
+    }
+  });
+  while (spread.length < trip.days) spread.push([]);
+  return spread;
 };
 
 export type Stop = {
