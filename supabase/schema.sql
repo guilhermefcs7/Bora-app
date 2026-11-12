@@ -3,7 +3,7 @@
 
 create table if not exists public.trips (
   code text primary key check (code ~ '^[A-Z0-9]{6}$'),
-  data jsonb not null,
+  data jsonb not null check (pg_column_size(data) < 600000),
   updated_at timestamptz not null default now()
 );
 
@@ -34,6 +34,8 @@ alter table public.votes enable row level security;
 create policy "trips anon" on public.trips for all to anon using (true) with check (true);
 create policy "members anon" on public.members for all to anon using (true) with check (true);
 create policy "votes anon" on public.votes for all to anon using (true) with check (true);
+
+grant select, insert, update, delete on public.trips, public.members, public.votes to anon;
 
 -- Tempo real
 alter publication supabase_realtime add table public.trips, public.members, public.votes;

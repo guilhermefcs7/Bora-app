@@ -56,25 +56,21 @@ Em bases de ecoturismo (Mucugê, na Chapada Diamantina, por exemplo) quase não 
 3. Nunca bloqueia a criação da viagem. Se nada for encontrado, abre direto a busca para você adicionar lugares.
 4. "Adicionar lugar" busca qualquer ponto pelo nome perto do destino (cachoeira, restaurante, pousada) e usa a localização real no mapa e no roteiro.
 
-## Ligar a sincronização entre aparelhos (opcional)
+## Sincronização entre aparelhos
 
-Sem configurar nada, o app roda em **modo local**. Para amigos entrarem pelo código, cada um no seu celular:
+Já está ligada. O app usa um projeto Supabase gratuito (`bora-app`, região eu-west-1); a URL e a chave pública ficam em `src/config.ts`.
 
-1. Crie um projeto gratuito em https://supabase.com.
-2. No **SQL Editor**, cole e rode `supabase/schema.sql`.
-3. Em **Project Settings > API**, copie a URL e a chave `anon`.
-4. Copie `.env.example` para `.env` e preencha:
+- Quem cria a viagem compartilha o link ou o código pela aba Grupo.
+- Quem recebe abre o link (ou usa "Entrar com código") e passa a votar na mesma viagem, em tempo real.
+- Sem internet, tudo continua funcionando no aparelho e sobe quando a conexão volta.
 
-   ```
-   EXPO_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-   ```
+Para usar outro projeto: rode `supabase/schema.sql` nele e defina `EXPO_PUBLIC_SUPABASE_URL` e `EXPO_PUBLIC_SUPABASE_ANON_KEY` (no `.env` local ou nas Variables do GitHub Actions).
 
-5. Reinicie com `npx expo start -c`.
+Limites que valem conhecer:
 
-Segurança: não há login. Quem tem o código de 6 caracteres participa da viagem, e as políticas do banco liberam leitura e escrita para a chave pública. Serve para uso entre amigos; não guarde dados sensíveis.
-
-Observação: a sincronização foi escrita e testada na parte de lógica (junção de votos), mas não foi exercitada contra um projeto Supabase real. Teste com dois aparelhos antes de depender dela.
+- **Sem login.** Quem tem o código de 6 caracteres participa da viagem, e a chave pública permite ler e alterar as tabelas. Serve para uso entre amigos; não guarde dados sensíveis.
+- **Roteiro, lugares e checklist:** vale a última alteração salva. Os votos de cada pessoa não se sobrescrevem.
+- **Plano gratuito do Supabase:** o projeto é pausado após cerca de uma semana sem uso e precisa ser reativado no painel.
 
 ## Gerar APK / IPA instalável
 

@@ -1,10 +1,11 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
+import { SUPABASE_KEY, SUPABASE_URL } from '../config';
 import type { Member, Trip, VoteValue } from '../types';
 
-// Sincronização opcional do grupo. Sem as variáveis de ambiente, o app roda em modo local.
+// Sincronização do grupo pelo Supabase. Se o cliente não puder ser criado, o app roda em modo local.
 
-const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const url = SUPABASE_URL;
+const key = SUPABASE_KEY;
 
 let client: SupabaseClient | null = null;
 try {

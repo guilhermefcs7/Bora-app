@@ -33,7 +33,16 @@ var ll=P.map(function(p){return [p.a,p.o]});
 if(ll.length>1){L.polyline(ll,{color:"#1D4ED8",weight:4,opacity:.85,dashArray:"2 9",lineCap:"round"}).addTo(map)}
 P.forEach(function(p,i){L.marker([p.a,p.o],{icon:L.divIcon({className:"",html:'<div class="n">'+(i+1)+'</div>',iconSize:[26,26],iconAnchor:[13,13]})}).addTo(map).bindTooltip((i+1)+". "+p.n,{direction:"top",offset:[0,-12]})});
 if(ll.length>1){map.fitBounds(ll,{padding:[34,34],maxZoom:16})}else{map.setView(ll[0],15)}
-document.getElementById("m").addEventListener("wheel",function(e){if(!e.altKey)return;e.preventDefault();var d=(e.deltaY||e.deltaX)<0?1:-1;map.setZoomAround(map.mouseEventToContainerPoint(e),map.getZoom()+d)},{passive:false});
+var acc=0;
+window.addEventListener("wheel",function(e){
+if(!e.altKey)return;
+e.preventDefault();e.stopPropagation();
+acc+=-(e.deltaY||e.deltaX);
+if(Math.abs(acc)<40)return;
+var step=acc>0?1:-1;acc=0;
+map.setZoomAround(map.mouseEventToContainerPoint(e),map.getZoom()+step);
+},{passive:false,capture:true});
+window.__map=map;
 }catch(e){say("fail")}
 </script></body></html>`;
 };
