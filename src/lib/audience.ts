@@ -13,7 +13,8 @@ export type Interest =
   | 'noite'
   | 'compras'
   | 'praia'
-  | 'familia';
+  | 'familia'
+  | 'esporte';
 
 export const interestInfo: Record<Interest, { label: string; likes: string; audience: string }> = {
   arte: { label: 'Arte', likes: 'arte', audience: 'Quem gosta de arte' },
@@ -26,6 +27,7 @@ export const interestInfo: Record<Interest, { label: string; likes: string; audi
   compras: { label: 'Compras', likes: 'compras', audience: 'Quem gosta de compras' },
   praia: { label: 'Praia', likes: 'sol e mar', audience: 'Quem quer sol e mar' },
   familia: { label: 'Família', likes: 'passeios em família', audience: 'Famílias com crianças' },
+  esporte: { label: 'Esporte', likes: 'esporte e grandes eventos', audience: 'Fãs de esporte' },
 };
 
 export const allInterests = Object.keys(interestInfo) as Interest[];
@@ -93,7 +95,6 @@ const HINTS: [RegExp, Interest[], string[]][] = [
   [/\b(theatre|theater|opera|concert|cabaret)\b/i, ['noite', 'arte'], []],
   [/\b(square|plaza|street|avenue|boulevard|quarter|district|old town|historic cent(re|er)|promenade)\b/i, ['fotografia'], []],
   [/\b(shopping|mall|department store|arcade)\b/i, ['compras'], []],
-  [/\b(stadium|arena)\b/i, [], ['Fãs de esporte']],
   [/\b(bridge|arch|monument|statue|fountain|obelisk)\b/i, ['fotografia', 'arquitetura'], []],
 ];
 
@@ -108,7 +109,17 @@ export type PlaceProfile = {
 const joinPt = (items: string[]) =>
   items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`;
 
+const STADIUM = /\b(stadium|arena)\b/i;
+
 export const profileOf = (place: Pick<Place, 'cat' | 'kind'>): PlaceProfile => {
+  // estádio cai na categoria "monumento", mas o perfil é outro
+  if (place.kind && STADIUM.test(place.kind)) {
+    return {
+      interests: ['esporte'],
+      pitch: 'Pode encaixar bem se você gosta de esporte e grandes eventos. Confira antes se há jogo, show ou visita guiada no dia.',
+      audience: ['Fãs de esporte', 'Grupos de amigos'],
+    };
+  }
   const base = BASE[place.cat];
   const hinted: Interest[] = [];
   const extra: string[] = [];

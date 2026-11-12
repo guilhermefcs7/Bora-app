@@ -184,4 +184,5 @@ test('perfil do lugar: interesses, público e frase amigável', () => {
   assert.deepEqual(matchInterests({ cat: 'natureza', kind: 'Park in Dublin' }, ['familia', 'compras']), ['familia']);
   assert.deepEqual(matchInterests({ cat: 'natureza' }, undefined), []);
   assert.ok(profileOf({ cat: 'comida' }).pitch.includes('comer bem'));
+  assert.deepEqual(profileOf({ cat: 'monumento', kind: 'Football stadium in Salvador, Brazil' }).interests, ['esporte']);
 });

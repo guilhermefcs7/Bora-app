@@ -4,7 +4,8 @@ import { WebView } from 'react-native-webview';
 import type { Place } from '../types';
 import { RouteMap } from './RouteMap';
 
-// Mapa real do dia (OpenStreetMap via Leaflet), sem chave de API.
+// Mapa real do dia (dados do OpenStreetMap, tiles da CARTO, via Leaflet), sem chave de API.
+// Os tiles do próprio openstreetmap.org recusam pedidos sem Referer, que é o caso de WebView e iframe isolado.
 // Enquanto o mapa não carrega, ou sem internet, fica visível o desenho simples da rota.
 
 const esc = (s: string) => s.replace(/[<>&"'\\]/g, ' ');
@@ -24,7 +25,7 @@ function say(t){try{if(window.ReactNativeWebView){window.ReactNativeWebView.post
 try{
 var P=${pts};
 var map=L.map("m",{zoomControl:true,scrollWheelZoom:false});
-var tiles=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"});
+var tiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:19,attribution:"&copy; OpenStreetMap &copy; CARTO"});
 var told=false;tiles.on("tileload",function(){if(!told){told=true;say("ok")}});
 tiles.addTo(map);
 var ll=P.map(function(p){return [p.a,p.o]});
