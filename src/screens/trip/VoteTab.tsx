@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SwipeDeck, type SwipeCardHandle } from '../../components/SwipeDeck';
 import { Avatar, Button, Card, Chip, H2, IconButton, Progress } from '../../components/ui';
-import { suggestSpots, type SpotSuggestion } from '../../lib/places';
+import { findPhoto, suggestSpots, type SpotSuggestion } from '../../lib/places';
 import { uid } from '../../lib/storage';
 import { useStore } from '../../store';
 import { catInfo, colors } from '../../theme';
@@ -91,6 +91,12 @@ export const VoteTab = ({ trip, voterId, onPickVoter, onDone, onMore }: Props) =
       custom: true,
     };
     updateTrip(trip.id, (t) => ({ ...t, places: [place, ...t.places] }), true);
+    if (spot) {
+      // foto é extra: chega depois, se existir alguma do lugar ou dos arredores
+      void findPhoto(place.name, place.lat, place.lng).then((img) => {
+        if (img) updateTrip(trip.id, (t) => ({ ...t, places: t.places.map((p) => (p.id === place.id ? { ...p, img } : p)) }), true);
+      });
+    }
     setNewName('');
     setSpot(null);
     setSpots([]);

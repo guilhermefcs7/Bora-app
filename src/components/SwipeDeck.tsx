@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
+import React, { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { matchInterests, profileOf } from '../lib/audience';
 import { catInfo, colors, durLabel } from '../theme';
@@ -11,6 +11,35 @@ const OUT = 520;
 
 export type SwipeCardHandle = { fling: (v: VoteValue) => void };
 
+/** Selo da categoria. Tocar abre a dica "por que ir" daquele tipo de lugar. */
+export const CategoryTip = ({ place, light }: { place: Pick<Place, 'cat' | 'kind'>; light?: boolean }) => {
+  const [open, setOpen] = useState(false);
+  const info = catInfo[place.cat];
+  return (
+    <View style={s.tipWrap}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${info.label}. Toque para ver por que ir`}
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((o) => !o)}
+        hitSlop={8}
+        style={[s.catBadge, light && { backgroundColor: colors.bg }]}
+      >
+        <Text style={s.catText}>{info.label.toUpperCase()}</Text>
+        <View style={s.tipDot}>
+          <Text style={s.tipDotText}>{open ? '×' : 'i'}</Text>
+        </View>
+      </Pressable>
+      {open && (
+        <Pressable accessibilityRole="button" accessibilityLabel="Fechar dica" onPress={() => setOpen(false)} style={s.tipBubble}>
+          <Text style={s.tipTitle}>Por que ir</Text>
+          <Text style={s.tipText}>{profileOf(place).pitch}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+};
+
 const CardFace = ({
   place,
   approvers,
@@ -22,15 +51,13 @@ const CardFace = ({
   myInterests?: string[];
   onMore?: () => void;
 }) => {
-  const info = catInfo[place.cat];
-  const profile = profileOf(place);
   const matches = matchInterests(place, myInterests);
   return (
     <View style={s.face}>
       <View style={s.art}>
         <PlacePhoto place={place} style={s.photo} iconSize={96} />
-        <View style={s.catBadge}>
-          <Text style={s.catText}>{info.label.toUpperCase()}</Text>
+        <View style={s.tipPos}>
+          <CategoryTip place={place} />
         </View>
         {matches.length > 0 && (
           <View style={s.matchBadge}>
@@ -42,15 +69,12 @@ const CardFace = ({
         <Text style={s.title} numberOfLines={2}>
           {place.name}
         </Text>
-        <Text style={s.desc} numberOfLines={3}>
-          {profile.pitch}
+        <Text style={s.desc} numberOfLines={4}>
+          {place.more ?? place.desc}
         </Text>
         <View style={s.tags}>
           <Tag label={`cerca de ${durLabel(place.dur)}`} />
-          {place.far ? <Tag label={`a ${place.far} km do centro`} /> : null}
-          {profile.audience.slice(0, place.far ? 1 : 2).map((a) => (
-            <Tag key={a} label={a} />
-          ))}
+          {place.far ? <Tag label={`a ${place.far} km do centro`} /> : <Tag label="no centro" />}
         </View>
         <View style={s.footer}>
           {approvers.length > 0 ? (
@@ -125,13 +149,13 @@ const TopCard = forwardRef<
         style={[s.card, { transform: [{ translateX: pos.x }, { translateY: pos.y }, { rotate }] }]}
       >
         <CardFace place={place} approvers={approvers} myInterests={myInterests} onMore={onMore} />
-        <Animated.View style={[s.stamp, s.stampRight, { opacity: likeO, borderColor: colors.white }]}>
+        <Animated.View pointerEvents="none" style={[s.stamp, s.stampRight, { opacity: likeO, borderColor: colors.white }]}>
           <Text style={s.stampText}>BORA</Text>
         </Animated.View>
-        <Animated.View style={[s.stamp, s.stampLeft, { opacity: nopeO, borderColor: colors.white }]}>
+        <Animated.View pointerEvents="none" style={[s.stamp, s.stampLeft, { opacity: nopeO, borderColor: colors.white }]}>
           <Text style={s.stampText}>PASSO</Text>
         </Animated.View>
-        <Animated.View style={[s.stamp, s.stampCenter, { opacity: superO, borderColor: colors.white }]}>
+        <Animated.View pointerEvents="none" style={[s.stamp, s.stampCenter, { opacity: superO, borderColor: colors.white }]}>
           <Text style={s.stampText}>IMPERDÍVEL</Text>
         </Animated.View>
       </Animated.View>
@@ -191,7 +215,14 @@ const s = StyleSheet.create({
   footer: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 'auto' },
   more: { height: 44, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   moreText: { fontSize: 14, fontWeight: '700', color: colors.ink },
-  catBadge: { position: 'absolute', left: 16, top: 16, backgroundColor: colors.white, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  tipPos: { position: 'absolute', left: 16, top: 16, right: 16 },
+  tipWrap: { alignItems: 'flex-start' },
+  catBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.white, borderRadius: 10, paddingLeft: 10, paddingRight: 6, paddingVertical: 5 },
+  tipDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  tipDotText: { color: colors.white, fontSize: 12, fontWeight: '700', lineHeight: 16 },
+  tipBubble: { marginTop: 6, maxWidth: 300, backgroundColor: colors.ink, borderRadius: 12, padding: 12 },
+  tipTitle: { color: colors.white, fontSize: 12, fontWeight: '700', marginBottom: 2 },
+  tipText: { color: colors.white, fontSize: 13, lineHeight: 19 },
   catText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4, color: colors.ink },
   body: { flex: 6, padding: 18, gap: 8 },
   title: { fontFamily: headingFont, fontSize: 23, fontWeight: '700', color: colors.ink },

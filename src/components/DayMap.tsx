@@ -1,16 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { APP_URL } from '../config';
 import type { Place } from '../types';
 import { RouteMap } from './RouteMap';
 
 // Mapa real do dia (OpenStreetMap via Leaflet), sem chave de API.
 // Os tiles do openstreetmap.org recusam pedidos sem Referer. Por isso o iframe da web não usa
 // `sandbox` (herda a origem da página) e o WebView nativo recebe uma baseUrl.
-
-/** Endereço público do app, enviado como Referer nos pedidos de mapa do app nativo. */
-const APP_URL = 'https://guilhermefcs7.github.io/Bora-app/';
-// Enquanto o mapa não carrega, ou sem internet, fica visível o desenho simples da rota.
 
 const esc = (s: string) => s.replace(/[<>&"'\\]/g, ' ');
 
@@ -36,6 +33,7 @@ var ll=P.map(function(p){return [p.a,p.o]});
 if(ll.length>1){L.polyline(ll,{color:"#1D4ED8",weight:4,opacity:.85,dashArray:"2 9",lineCap:"round"}).addTo(map)}
 P.forEach(function(p,i){L.marker([p.a,p.o],{icon:L.divIcon({className:"",html:'<div class="n">'+(i+1)+'</div>',iconSize:[26,26],iconAnchor:[13,13]})}).addTo(map).bindTooltip((i+1)+". "+p.n,{direction:"top",offset:[0,-12]})});
 if(ll.length>1){map.fitBounds(ll,{padding:[34,34],maxZoom:16})}else{map.setView(ll[0],15)}
+document.getElementById("m").addEventListener("wheel",function(e){if(!e.altKey)return;e.preventDefault();var d=(e.deltaY||e.deltaX)<0?1:-1;map.setZoomAround(map.mouseEventToContainerPoint(e),map.getZoom()+d)},{passive:false});
 }catch(e){say("fail")}
 </script></body></html>`;
 };
@@ -83,6 +81,11 @@ export const DayMap = ({ stops, height = 240 }: { stops: Place[]; height?: numbe
           scrollEnabled={false}
           style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, opacity: ready ? 1 : 0, backgroundColor: 'transparent' }}
         />
+      )}
+      {Platform.OS === 'web' && ready && (
+        <View pointerEvents="none" style={{ position: 'absolute', right: 8, top: 8, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: '#14213D' }}>Alt + rolagem para zoom</Text>
+        </View>
       )}
     </View>
   );

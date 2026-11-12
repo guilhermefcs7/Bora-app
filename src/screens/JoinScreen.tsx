@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button, Header } from '../components/ui';
+import { extractCode } from '../lib/invite';
 import { syncEnabled } from '../lib/sync';
 import { useNav } from '../nav';
 import { useStore } from '../store';
 import { colors } from '../theme';
 
-export const JoinScreen = () => {
+export const JoinScreen = ({ initialCode = '' }: { initialCode?: string }) => {
   const nav = useNav();
   const { joinTrip } = useStore();
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(extractCode(initialCode));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -30,11 +31,11 @@ export const JoinScreen = () => {
     <View style={{ flex: 1 }}>
       <Header title="Entrar com código" onBack={nav.back} />
       <View style={s.body}>
-        <Text style={s.lead}>Peça o código de 6 caracteres para quem criou a viagem.</Text>
+        <Text style={s.lead}>Cole o código de 6 caracteres, o link ou a mensagem de convite inteira: o app acha o código sozinho.</Text>
         <TextInput
           accessibilityLabel="Código de convite"
           value={code}
-          onChangeText={(t) => setCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+          onChangeText={(t) => setCode(extractCode(t))}
           placeholder="ABC123"
           placeholderTextColor={colors.muted}
           autoCapitalize="characters"

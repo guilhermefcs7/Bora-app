@@ -7,6 +7,8 @@ import { distanceKm, travel } from '../src/lib/geo';
 import { dayDistanceKm, generateItinerary, itineraryPlaces, optimizeRoute, scheduleDay } from '../src/lib/itinerary';
 import { mergeRemote } from '../src/lib/sync';
 import { profileOf, matchInterests } from '../src/lib/audience';
+import { findCenter } from '../src/lib/places';
+import { extractCode, inviteLink } from '../src/lib/invite';
 import type { Trip } from '../src/types';
 
 const lisboa = catalog[0];
@@ -224,4 +226,23 @@ test('adicionar lugar: converte resultados da busca e sugere a categoria', () =>
   ]);
   assert.deepEqual(s.map((x) => [x.name, x.cat, x.detail]), [['Sabor da Chapada', 'comida', 'Rua Direita, Mucugê'], ['Cachoeira do Tiburtino', 'natureza', 'Mucugê']]);
   assert.equal(s[0].lat, -13.0);
+});
+
+test('convite: extrai o código de link, mensagem ou texto puro', () => {
+  assert.equal(extractCode('ABC234'), 'ABC234');
+  assert.equal(extractCode('abc234'), 'ABC234');
+  assert.equal(extractCode(inviteLink('LX7K2P')), 'LX7K2P');
+  assert.equal(extractCode('Estamos planejando Salvador no Bora. Código da viagem: PUK692'), 'PUK692');
+  assert.equal(extractCode('Bora planejar Mucugê comigo? Entre por este link: https://guilhermefcs7.github.io/Bora-app/#Y43TBE\nOu abra o app e use o código Y43TBE.'), 'Y43TBE');
+  assert.equal(extractCode('ab'), 'AB');
+});
+
+test('centro do destino: usa o artigo da própria cidade quando existe', () => {
+  const pages: WikiPage[] = [
+    { pageid: 1, title: 'Chapada Diamantina', coordinates: [{ lat: -12.9, lon: -41.4 }] },
+    { pageid: 2, title: 'Mucugê', coordinates: [{ lat: -13.005, lon: -41.371 }] },
+  ];
+  assert.deepEqual(findCenter('Mucugê', pages, { lat: -13.2, lng: -41.5 }), { lat: -13.005, lng: -41.371 });
+  assert.deepEqual(findCenter('Mucuge', pages, { lat: -13.2, lng: -41.5 }), { lat: -13.005, lng: -41.371 });
+  assert.deepEqual(findCenter('Lençóis', pages, { lat: -12.5, lng: -41.3 }), { lat: -12.5, lng: -41.3 });
 });

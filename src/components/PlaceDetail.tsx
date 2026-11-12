@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { interestInfo, matchInterests, profileOf } from '../lib/audience';
 import { loadMore, wikiUrl } from '../lib/places';
-import { catInfo, colors, durLabel } from '../theme';
+import { colors, durLabel } from '../theme';
 import type { Place } from '../types';
 import { PlacePhoto } from './PlacePhoto';
+import { CategoryTip } from './SwipeDeck';
 import { Button, H2, IconButton, Tag, headingFont } from './ui';
 
 type Props = {
@@ -24,8 +25,8 @@ export const PlaceDetail = ({ place, myInterests, onClose, onLoaded }: Props) =>
   useEffect(() => {
     if (!place) return;
     setText(place.more ?? null);
-    if (place.more || (!place.wikiPt && !place.wikiEn)) {
-      setState(place.more ? 'idle' : 'none');
+    if (!place.wikiPt && !place.wikiEn) {
+      setState('none');
       return;
     }
     let alive = true;
@@ -34,9 +35,9 @@ export const PlaceDetail = ({ place, myInterests, onClose, onLoaded }: Props) =>
       if (!alive) return;
       if (r) {
         setText(r.text);
-        setState('idle');
-        onLoaded?.(place.id, r.text);
-      } else setState('none');
+        if (r.text !== place.more) onLoaded?.(place.id, r.text);
+      }
+      setState('idle');
     });
     return () => {
       alive = false;
@@ -60,7 +61,7 @@ export const PlaceDetail = ({ place, myInterests, onClose, onLoaded }: Props) =>
               <IconButton icon="x" label="Fechar" onPress={onClose} />
             </View>
             <View style={s.body}>
-              <Text style={s.cat}>{catInfo[place.cat].label.toUpperCase()}</Text>
+              <CategoryTip place={place} light />
               <Text accessibilityRole="header" style={s.title}>
                 {place.name}
               </Text>
@@ -78,8 +79,12 @@ export const PlaceDetail = ({ place, myInterests, onClose, onLoaded }: Props) =>
                 </View>
               )}
 
-              <H2 style={s.h}>Por que ir</H2>
-              <Text style={s.p}>{profile.pitch}</Text>
+              <H2 style={s.h}>Sobre o lugar</H2>
+              {state === 'loading' && !text ? (
+                <ActivityIndicator color={colors.accent} style={{ alignSelf: 'flex-start', marginTop: 6 }} />
+              ) : (
+                <Text style={s.p}>{text ?? place.desc}</Text>
+              )}
 
               <H2 style={s.h}>Mais recomendado para</H2>
               <View style={s.tags}>
@@ -92,14 +97,6 @@ export const PlaceDetail = ({ place, myInterests, onClose, onLoaded }: Props) =>
 
               {!place.custom && (
                 <>
-                  <H2 style={s.h}>Sobre o lugar</H2>
-                  {state === 'loading' ? (
-                    <ActivityIndicator color={colors.accent} style={{ alignSelf: 'flex-start' }} />
-                  ) : text ? (
-                    <Text style={s.p}>{text}</Text>
-                  ) : (
-                    <Text style={s.muted}>Não foi possível carregar mais detalhes agora.</Text>
-                  )}
                   {url && (
                     <Button
                       label="Abrir artigo na Wikipédia"
@@ -129,8 +126,7 @@ const s = StyleSheet.create({
   photo: { height: 230 },
   close: { position: 'absolute', right: 14, top: 14 },
   body: { padding: 20 },
-  cat: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, color: colors.muted },
-  title: { fontFamily: headingFont, fontSize: 26, fontWeight: '700', color: colors.ink, marginTop: 4 },
+  title: { fontFamily: headingFont, fontSize: 26, fontWeight: '700', color: colors.ink, marginTop: 10 },
   desc: { fontSize: 15, lineHeight: 22, color: colors.body, marginTop: 6 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   match: { marginTop: 14, padding: 12, borderRadius: 12, backgroundColor: colors.accentTint },

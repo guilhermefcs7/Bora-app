@@ -3,7 +3,7 @@ import React from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavProvider, useNav } from './src/nav';
-import { HomeScreen } from './src/screens/HomeScreen';
+import { HomeScreen, Welcome } from './src/screens/HomeScreen';
 import { JoinScreen } from './src/screens/JoinScreen';
 import { NewTripScreen } from './src/screens/NewTripScreen';
 import { TripScreen } from './src/screens/trip/TripScreen';
@@ -12,7 +12,7 @@ import { colors } from './src/theme';
 
 const Screens = () => {
   const { route } = useNav();
-  const { ready } = useStore();
+  const { ready, profile } = useStore();
   const insets = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView
@@ -25,12 +25,14 @@ const Screens = () => {
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color={colors.accent} />
           </View>
+        ) : !profile.name ? (
+          <Welcome invited={route.name === 'join'} />
         ) : route.name === 'home' ? (
           <HomeScreen />
         ) : route.name === 'new' ? (
           <NewTripScreen />
         ) : route.name === 'join' ? (
-          <JoinScreen />
+          <JoinScreen initialCode={route.code} />
         ) : (
           <TripScreen key={route.id} id={route.id} initialTab={route.tab} />
         )}

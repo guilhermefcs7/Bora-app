@@ -65,6 +65,14 @@ export const pushTrip = async (trip: Trip): Promise<void> => {
     const v = await client.from('votes').upsert(rows);
     if (v.error) throw v.error;
   }
+  // votos desfeitos neste aparelho também saem do servidor
+  for (const x of mine) {
+    const keep = Object.keys(trip.votes[x.id] ?? {});
+    let del = client.from('votes').delete().eq('trip_code', trip.code).eq('member_id', x.id);
+    if (keep.length) del = del.not('place_id', 'in', `(${keep.map((id) => `"${id}"`).join(',')})`);
+    const d = await del;
+    if (d.error) throw d.error;
+  }
 };
 
 /** Busca a viagem pelo código. Retorna null se não existir. */

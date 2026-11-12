@@ -1,6 +1,20 @@
 import { Linking, Platform, Share } from 'react-native';
 import type { Place } from '../types';
 
+/** Copia um texto. No app nativo não há área de transferência sem biblioteca extra: abre o compartilhar. */
+export const copyText = async (text: string): Promise<'copied' | 'shared' | 'failed'> => {
+  if (Platform.OS !== 'web') return shareText(text);
+  try {
+    const nav = (globalThis as { navigator?: { clipboard?: { writeText: (t: string) => Promise<void> } } }).navigator;
+    if (!nav?.clipboard) return 'failed';
+    await nav.clipboard.writeText(text);
+    return 'copied';
+  } catch {
+    return 'failed';
+  }
+};
+
+
 /** Compartilha texto pelo sistema; na web, copia para a área de transferência. */
 export const shareText = async (message: string): Promise<'shared' | 'copied' | 'failed'> => {
   if (Platform.OS !== 'web') {

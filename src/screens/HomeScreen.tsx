@@ -53,14 +53,14 @@ const TripCard = ({ trip, index, meId, onOpen }: { trip: Trip; index: number; me
   );
 };
 
-const Welcome = () => {
+export const Welcome = ({ invited }: { invited?: boolean }) => {
   const { setProfile } = useStore();
   const [name, setName] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   return (
     <View style={s.welcome}>
       <Text style={s.logo}>Bora</Text>
-      <H1>Viagem em grupo sem discussão.</H1>
+      <H1>{invited ? 'Você foi convidado para uma viagem.' : 'Viagem em grupo sem discussão.'}</H1>
       <Text style={s.lead}>Cada um dá swipe nos lugares. O app mostra o que o grupo quer e monta o roteiro.</Text>
       <Text style={s.label}>Como te chamamos?</Text>
       <TextInput
@@ -96,7 +96,6 @@ export const HomeScreen = () => {
   const [name, setName] = useState(profile.name);
   useEffect(() => setName(profile.name), [profile.name]);
 
-  if (!profile.name) return <Welcome />;
 
   return (
     <View style={{ flex: 1 }}>

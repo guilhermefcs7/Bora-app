@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Avatar, Button, Card, H2, Progress, headingFont } from '../../components/ui';
 import { consensusLabel, memberProgress, rankPlaces } from '../../lib/consensus';
-import { shareText } from '../../lib/share';
+import { inviteLink } from '../../lib/invite';
+import { copyText, shareText } from '../../lib/share';
 import { uid } from '../../lib/storage';
 import { syncEnabled } from '../../lib/sync';
 import { useStore, type SyncStatus } from '../../store';
@@ -24,13 +25,15 @@ export const GroupTab = ({ trip, onGenerate }: { trip: Trip; onGenerate: () => v
   const anyVote = ranked.some((r) => r.voters > 0);
   const status: SyncStatus = syncEnabled() ? (syncStatus[trip.id] ?? 'syncing') : 'local';
 
+  const link = inviteLink(trip.code);
+  const report = (r: 'copied' | 'shared' | 'failed', what: string) =>
+    setNotice(r === 'copied' ? `${what} copiado.` : r === 'failed' ? `Não deu para copiar. O código é ${trip.code}.` : '');
+
+  const copyCode = async () => report(await copyText(trip.code), 'Código');
+  const copyLink = async () => report(await copyText(link), 'Link');
   const invite = async () => {
-    const r = await shareText(
-      syncEnabled()
-        ? `Bora planejar ${trip.destination}? Abra o app Bora, toque em "Entrar com código" e use: ${trip.code}`
-        : `Estamos planejando ${trip.destination} no Bora. Código da viagem: ${trip.code}`,
-    );
-    setNotice(r === 'copied' ? 'Convite copiado.' : r === 'failed' ? `Não deu para compartilhar. Passe o código ${trip.code}.` : '');
+    const r = await shareText(`Bora planejar ${trip.destination} comigo? Entre por este link: ${link}\nOu abra o app e use o código ${trip.code}.`);
+    report(r, 'Convite');
   };
 
   const addLocal = () => {
@@ -50,13 +53,20 @@ export const GroupTab = ({ trip, onGenerate }: { trip: Trip; onGenerate: () => v
   return (
     <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
       <View style={s.codeCard}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.codeLabel}>Código de convite</Text>
-          <Text style={s.code} selectable>
-            {trip.code}
-          </Text>
+        <Text style={s.codeLabel}>Código de convite</Text>
+        <Text style={s.code} selectable>
+          {trip.code}
+        </Text>
+        <View style={s.codeActions}>
+          <Button label="Copiar código" kind="outline" small onPress={() => void copyCode()} style={s.codeBtn} />
+          <Button label="Copiar link" kind="outline" small onPress={() => void copyLink()} style={s.codeBtn} />
+          {Platform.OS !== 'web' && <Button label="Enviar" kind="outline" small onPress={() => void invite()} style={s.codeBtn} />}
         </View>
-        <Button label="Convidar" kind="outline" small onPress={() => void invite()} style={{ borderWidth: 0 }} />
+        {!syncEnabled() && (
+          <Text style={s.codeWarn}>
+            O app está em modo local: o código ainda não funciona em outro aparelho. Ligue a sincronização para convidar.
+          </Text>
+        )}
       </View>
       <View style={s.statusRow}>
         <Text style={s.muted}>{statusText[status]}</Text>
@@ -128,7 +138,10 @@ export const GroupTab = ({ trip, onGenerate }: { trip: Trip; onGenerate: () => v
 
 const s = StyleSheet.create({
   scroll: { padding: 20, gap: 12, paddingBottom: 32 },
-  codeCard: { backgroundColor: colors.ink, borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center' },
+  codeCard: { backgroundColor: colors.ink, borderRadius: 20, padding: 16 },
+  codeActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  codeBtn: { borderWidth: 0, flexGrow: 1 },
+  codeWarn: { fontSize: 12, lineHeight: 17, color: '#FFD9C7', marginTop: 10 },
   codeLabel: { fontSize: 12, color: '#D5DAE6' },
   code: { fontFamily: headingFont, fontSize: 30, fontWeight: '700', letterSpacing: 4, color: colors.white, marginTop: 4 },
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 },

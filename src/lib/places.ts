@@ -1,4 +1,5 @@
 import type { Category, Destination, Place } from '../types';
+import { MAX_KM } from '../config';
 import { distanceKm } from './geo';
 
 // Dados 100% dinâmicos e gratuitos, sem chave de API:
@@ -312,6 +313,130 @@ const searchNear = async (lang: 'en' | 'pt', lat: number, lng: number, km: numbe
     .map((p, i) => ({ ...p, index: offset + i + 1 }));
 };
 
+// ---------- Centro, textos e fotos ----------
+
+const plain = (t: string) =>
+  t
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s*\([^)]*\)$/, '')
+    .split(',')[0]
+    .trim();
+
+/**
+ * O autocomplete devolve o centro geométrico do município, que pode ficar longe da cidade.
+ * O artigo da Wikipédia sobre o próprio destino aponta para a sede: quando existe, ele vira o centro.
+ */
+export const findCenter = (name: string, pages: WikiPage[], fallback: { lat: number; lng: number }) => {
+  const target = plain(name);
+  const hit = pages.find((p) => p.coordinates?.[0] && plain(p.title) === target);
+  const c = hit?.coordinates?.[0];
+  return c ? { lat: c.lat, lng: c.lon } : fallback;
+};
+
+type ExtractPage = { title: string; extract?: string };
+
+/** Resumo curto de vários artigos de uma vez (a API aceita 20 por chamada). */
+const loadExtracts = async (lang: 'pt' | 'en', titles: string[]): Promise<Map<string, string>> => {
+  const out = new Map<string, string>();
+  const chunks: string[][] = [];
+  for (let i = 0; i < titles.length; i += 20) chunks.push(titles.slice(i, i + 20));
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      try {
+        const res = await request(
+          `https://${lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=extracts&exintro=1&explaintext=1&exsentences=3&exlimit=20&redirects=1&titles=${encodeURIComponent(chunk.join('|'))}`,
+          undefined,
+          12000,
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          query?: {
+            pages?: Record<string, ExtractPage>;
+            normalized?: { from: string; to: string }[];
+            redirects?: { from: string; to: string }[];
+          };
+        };
+        const byTitle = new Map<string, string>();
+        for (const p of Object.values(data.query?.pages ?? {})) if (p.extract) byTitle.set(p.title, p.extract.trim());
+        // o título pedido pode ter sido normalizado ou redirecionado
+        const alias = new Map<string, string>();
+        for (const n of data.query?.normalized ?? []) alias.set(n.from, n.to);
+        const redirect = new Map<string, string>();
+        for (const r of data.query?.redirects ?? []) redirect.set(r.from, r.to);
+        for (const asked of chunk) {
+          const step = alias.get(asked) ?? asked;
+          const text = byTitle.get(redirect.get(step) ?? step);
+          if (text && text.length > 40) out.set(asked, text);
+        }
+      } catch {
+        // sem resumo para este lote
+      }
+    }),
+  );
+  return out;
+};
+
+type CommonsPage = { title?: string; index?: number; imageinfo?: { thumburl?: string; url?: string; mime?: string }[] };
+
+const firstPhoto = (pages: Record<string, CommonsPage> | undefined): string | undefined => {
+  const list = Object.values(pages ?? {}).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  for (const p of list) {
+    const info = p.imageinfo?.[0];
+    // só fotos: fica de fora mapa, brasão e ícone (svg, png)
+    if (info?.thumburl && info.mime === 'image/jpeg') return info.thumburl;
+  }
+  return undefined;
+};
+
+/**
+ * Segunda e terceira fontes de foto, no Wikimedia Commons:
+ * primeiro arquivos cujo texto cita o nome do lugar, depois fotos tiradas a até 1 km dele.
+ */
+export const findPhoto = async (name: string, lat: number, lng: number): Promise<string | undefined> => {
+  const base = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&prop=imageinfo&iiprop=url|mime&iiurlwidth=640';
+  const clean = name.replace(/\s*\([^)]*\)$/, '').replace(/"/g, '');
+  try {
+    const res = await request(
+      `${base}&generator=search&gsrnamespace=6&gsrlimit=6&gsrsearch=${encodeURIComponent(`"${clean}" filetype:bitmap`)}`,
+      undefined,
+      10000,
+    );
+    if (res.ok) {
+      const hit = firstPhoto(((await res.json()) as { query?: { pages?: Record<string, CommonsPage> } }).query?.pages);
+      if (hit) return hit;
+    }
+  } catch {
+    // tenta a busca por proximidade
+  }
+  try {
+    const res = await request(`${base}&generator=geosearch&ggsnamespace=6&ggslimit=8&ggsradius=1000&ggscoord=${lat}|${lng}`, undefined, 10000);
+    if (res.ok) return firstPhoto(((await res.json()) as { query?: { pages?: Record<string, CommonsPage> } }).query?.pages);
+  } catch {
+    // sem foto
+  }
+  return undefined;
+};
+
+/** Completa texto e foto dos lugares já escolhidos. Tudo aqui é opcional: falha vira ausência. */
+const enrich = async (places: Place[]): Promise<Place[]> => {
+  const ptTitles = places.filter((p) => p.wikiPt).map((p) => p.wikiPt!);
+  const enTitles = places.filter((p) => !p.wikiPt && p.wikiEn).map((p) => p.wikiEn!);
+  const noPhoto = places.filter((p) => !p.img).slice(0, 40);
+  const [pt, en, photos] = await Promise.all([
+    loadExtracts('pt', ptTitles),
+    loadExtracts('en', enTitles),
+    Promise.all(noPhoto.map((p) => findPhoto(p.name, p.lat, p.lng))),
+  ]);
+  const photoOf = new Map(noPhoto.map((p, i) => [p.id, photos[i]]));
+  return places.map((p) => ({
+    ...p,
+    more: (p.wikiPt ? pt.get(p.wikiPt) : p.wikiEn ? en.get(p.wikiEn) : undefined) ?? p.more,
+    img: p.img ?? photoOf.get(p.id),
+  }));
+};
+
 /**
  * Busca os lugares do destino escolhido no autocomplete.
  * `wanted` = quantos lugares a viagem precisa (dias × atividades por dia).
@@ -322,9 +447,10 @@ export const loadDestination = async (s: Suggestion, wanted = 16): Promise<Desti
   const batchCount = limit > 40 ? 10 : 6;
   let candidates: Candidate[] = [];
   let usedKm = s.radiusKm;
-  // Amplia o raio aos poucos. Os dois últimos passos (60 e 100 km) só entram quando o destino
-  // é pequeno e quase nada apareceu: é o caso de bases de ecoturismo, onde as atrações ficam longe.
-  const steps = [s.radiusKm, Math.min(25, Math.round(s.radiusKm * 2.5)), 60, 100];
+  let center = { lat: s.lat, lng: s.lng };
+  // Amplia o raio aos poucos. O último passo (MAX_KM) só entra quando o destino é pequeno e quase
+  // nada apareceu: é o caso de bases de ecoturismo, onde as atrações ficam nos arredores.
+  const steps = [s.radiusKm, Math.min(25, Math.round(s.radiusKm * 2.5)), MAX_KM];
   for (let i = 0; i < steps.length; i++) {
     const km = steps[i];
     let en: WikiPage[];
@@ -342,6 +468,7 @@ export const loadDestination = async (s: Suggestion, wanted = 16): Promise<Desti
     } catch {
       throw new PlacesError('rede', 'Não foi possível buscar os lugares agora. Verifique a internet e tente de novo.');
     }
+    center = findCenter(s.name, [...en, ...pt], { lat: s.lat, lng: s.lng });
     candidates = mergeSources(en, pt, limit);
     usedKm = km;
     const enough = i < 1 ? Math.min(limit, wanted) : 8;
@@ -369,17 +496,21 @@ export const loadDestination = async (s: Suggestion, wanted = 16): Promise<Desti
     }),
   );
 
+  // do mais perto do centro para o mais longe; fora do limite viável, não entra
+  const placed = applyWikidata(candidates, entities)
+    .map((p) => ({ p, km: distanceKm(center, p) }))
+    .filter((x) => x.km <= MAX_KM)
+    .sort((a, b) => a.km - b.km)
+    .map(({ p, km }) => (km >= 2 ? { ...p, far: Math.round(km) } : p));
+
   return {
     id: s.key,
     name: s.name,
     country: s.detail,
-    lat: s.lat,
-    lng: s.lng,
+    lat: center.lat,
+    lng: center.lng,
     radiusKm: usedKm,
-    places: applyWikidata(candidates, entities).map((p) => {
-      const far = distanceKm({ lat: s.lat, lng: s.lng }, p);
-      return far >= 3 ? { ...p, far: Math.round(far) } : p;
-    }),
+    places: await enrich(placed),
   };
 };
 
