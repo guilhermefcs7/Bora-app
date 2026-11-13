@@ -132,6 +132,7 @@ export const StoreProvider = ({ children }: { children: React.ReactNode }) => {
         pace: perDay <= 3 ? 'leve' : perDay <= 5 ? 'moderado' : 'intenso',
         perDay,
         searchKm: destination.radiusKm,
+        cover: destination.cover,
         places: destination.places,
         members: [{ id: profile.id, name: profile.name || 'Você', color: profile.color }],
         localMemberIds: [profile.id],

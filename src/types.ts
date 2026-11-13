@@ -43,6 +43,8 @@ export type Destination = {
   lng: number;
   /** raio em km efetivamente usado na busca dos lugares */
   radiusKm?: number;
+  /** foto do próprio destino */
+  cover?: string;
   places: Place[];
 };
 
@@ -68,6 +70,8 @@ export type Trip = {
   perDay?: number;
   /** raio em km usado na busca dos lugares; grande quando o destino tem pouca coisa catalogada */
   searchKm?: number;
+  /** foto do destino, para a capa da viagem */
+  cover?: string;
   places: Place[];
   members: Member[];
   /** ids dos membros criados neste aparelho */

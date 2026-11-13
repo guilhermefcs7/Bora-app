@@ -353,7 +353,7 @@ export const findCenter = (name: string, pages: WikiPage[], fallback: { lat: num
   const target = plain(name);
   const hit = pages.find((p) => p.coordinates?.[0] && plain(p.title) === target);
   const c = hit?.coordinates?.[0];
-  return c ? { lat: c.lat, lng: c.lon } : fallback;
+  return c ? { lat: c.lat, lng: c.lon, cover: hit?.thumbnail?.source } : { ...fallback, cover: undefined as string | undefined };
 };
 
 type ExtractPage = { title: string; extract?: string };
@@ -468,7 +468,7 @@ export const loadDestination = async (s: Suggestion, wanted = 16): Promise<Desti
   const batchCount = limit > 40 ? 10 : 6;
   let candidates: Candidate[] = [];
   let usedKm = s.radiusKm;
-  let center = { lat: s.lat, lng: s.lng };
+  let center: { lat: number; lng: number; cover?: string } = { lat: s.lat, lng: s.lng };
   // Amplia o raio aos poucos. O último passo (MAX_KM) só entra quando o destino é pequeno e quase
   // nada apareceu: é o caso de bases de ecoturismo, onde as atrações ficam nos arredores.
   const steps = [s.radiusKm, Math.min(25, Math.round(s.radiusKm * 2.5)), MAX_KM];
@@ -531,6 +531,7 @@ export const loadDestination = async (s: Suggestion, wanted = 16): Promise<Desti
     lat: center.lat,
     lng: center.lng,
     radiusKm: usedKm,
+    cover: center.cover,
     places: await enrich(placed),
   };
 };

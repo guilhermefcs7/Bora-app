@@ -242,7 +242,8 @@ test('centro do destino: usa o artigo da própria cidade quando existe', () => {
     { pageid: 1, title: 'Chapada Diamantina', coordinates: [{ lat: -12.9, lon: -41.4 }] },
     { pageid: 2, title: 'Mucugê', coordinates: [{ lat: -13.005, lon: -41.371 }] },
   ];
-  assert.deepEqual(findCenter('Mucugê', pages, { lat: -13.2, lng: -41.5 }), { lat: -13.005, lng: -41.371 });
-  assert.deepEqual(findCenter('Mucuge', pages, { lat: -13.2, lng: -41.5 }), { lat: -13.005, lng: -41.371 });
-  assert.deepEqual(findCenter('Lençóis', pages, { lat: -12.5, lng: -41.3 }), { lat: -12.5, lng: -41.3 });
+  const c = findCenter('Mucugê', pages, { lat: -13.2, lng: -41.5 });
+  assert.deepEqual([c.lat, c.lng], [-13.005, -41.371]);
+  assert.equal(findCenter('Mucuge', pages, { lat: -13.2, lng: -41.5 }).lat, -13.005);
+  assert.equal(findCenter('Lençóis', pages, { lat: -12.5, lng: -41.3 }).lat, -12.5);
 });

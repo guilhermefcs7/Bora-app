@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Icon } from '../components/Icon';
+import { SwipeRow } from '../components/SwipeRow';
 import { Avatar, Button, Card, Chip, H1, H2, IconButton, Progress, Tag, headingFont } from '../components/ui';
 import { memberProgress } from '../lib/consensus';
 import { syncEnabled } from '../lib/sync';
@@ -14,10 +15,19 @@ const bannerColors = [colors.ink, colors.teal, colors.blue, '#7C3AED', '#BE185D'
 
 const TripCard = ({ trip, index, meId, onOpen }: { trip: Trip; index: number; meId: string; onOpen: () => void }) => {
   const { done, total } = memberProgress(trip, meId);
+  // capa: foto do destino; em viagens antigas, a primeira foto de lugar que houver
+  const cover = trip.cover ?? trip.places.find((p) => p.img)?.img;
+  const [coverFailed, setCoverFailed] = useState(false);
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`Abrir viagem ${trip.destination}`} onPress={onOpen}>
       <Card style={{ overflow: 'hidden' }}>
         <View style={[s.banner, { backgroundColor: bannerColors[index % bannerColors.length] }]}>
+          {cover && !coverFailed ? (
+            <>
+              <Image source={{ uri: cover }} resizeMode="cover" onError={() => setCoverFailed(true)} style={s.bannerImg} accessibilityLabel={`Foto de ${trip.destination}`} />
+              <View style={s.bannerShade} />
+            </>
+          ) : null}
           <Text style={s.bannerTitle}>{trip.destination}</Text>
           <Text style={s.bannerSub}>
             {trip.days} {trip.days === 1 ? 'dia' : 'dias'} · {activitiesLabel(perDayOf(trip))} por dia
@@ -90,7 +100,7 @@ export const Welcome = ({ invited }: { invited?: boolean }) => {
 };
 
 export const HomeScreen = () => {
-  const { profile, setProfile, trips, saved, toggleSaved } = useStore();
+  const { profile, setProfile, trips, saved, toggleSaved, deleteTrip } = useStore();
   const nav = useNav();
   const [tab, setTab] = useState<'viagens' | 'salvos' | 'perfil'>('viagens');
   const [name, setName] = useState(profile.name);
@@ -111,7 +121,7 @@ export const HomeScreen = () => {
             </View>
             <View style={s.actions}>
               <Button label="Nova viagem" onPress={() => nav.push({ name: 'new' })} style={{ flex: 1 }} />
-              <Button label="Entrar com código" kind="outline" onPress={() => nav.push({ name: 'join' })} style={{ flex: 1 }} />
+              <Button label="Usar código" kind="outline" onPress={() => nav.push({ name: 'join' })} style={{ flex: 1 }} />
             </View>
             {trips.length === 0 ? (
               <Card style={s.empty}>
@@ -120,12 +130,14 @@ export const HomeScreen = () => {
               </Card>
             ) : (
               trips.map((t, i) => (
-                <TripCard key={t.id} trip={t} index={i} meId={profile.id} onOpen={() => nav.push({ name: 'trip', id: t.id })} />
+                <SwipeRow key={t.id} label={`viagem ${t.destination}`} onDelete={() => deleteTrip(t.id)}>
+                  <TripCard trip={t} index={i} meId={profile.id} onOpen={() => nav.push({ name: 'trip', id: t.id })} />
+                </SwipeRow>
               ))
             )}
             <View style={s.note}>
               <Icon name="check" size={20} color={colors.blue} />
-              <Text style={s.noteText}>Viagens ficam salvas no aparelho e abrem sem internet. Criar uma nova viagem precisa de conexão.</Text>
+              <Text style={s.noteText}>Viagens ficam salvas no aparelho e abrem sem internet. Para excluir uma, arraste o cartão para a esquerda.</Text>
             </View>
           </>
         )}
@@ -247,7 +259,9 @@ const s = StyleSheet.create({
   scroll: { padding: 20, gap: 14, paddingBottom: 32 },
   top: { flexDirection: 'row', alignItems: 'center' },
   actions: { flexDirection: 'row', gap: 12 },
-  banner: { height: 96, padding: 16, justifyContent: 'flex-end' },
+  banner: { height: 132, padding: 16, justifyContent: 'flex-end', overflow: 'hidden' },
+  bannerImg: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, width: '100%', height: '100%' },
+  bannerShade: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(20,33,61,0.5)' },
   bannerTitle: { fontFamily: headingFont, fontSize: 24, fontWeight: '700', color: colors.white },
   bannerSub: { fontSize: 13, color: '#E3E6EC', marginTop: 2 },
   cardBody: { padding: 14, gap: 10 },
