@@ -69,12 +69,20 @@ export const ItineraryTab = ({
   const remove = (id: string) => mutate((it) => it.map((dayIds) => dayIds.filter((x) => x !== id)));
 
   const optimize = () => {
-    const ids = optimizeRoute(stops).map((p) => p.id);
+    const before = dayDistanceKm(stops);
+    const best = optimizeRoute(stops);
+    const after = dayDistanceKm(best);
+    // o roteiro já nasce otimizado: só há o que mudar depois de mover ou reordenar paradas à mão
+    if (after >= before - 0.01) {
+      setNotice('Este dia já está na ordem de menor deslocamento. Nada a mudar.');
+      return;
+    }
+    const ids = best.map((p) => p.id);
     mutate((it) => {
       it[d] = ids;
       return it;
     });
-    setNotice('Dia reordenado pela rota mais curta.');
+    setNotice(`Dia reordenado: o deslocamento caiu de ${kmLabel(before)} para ${kmLabel(after)}.`);
   };
 
   const share = async () => {
@@ -206,7 +214,7 @@ export const ItineraryTab = ({
       ) : null}
 
       <View style={s.btnRow}>
-        <Button label="Otimizar dia" kind="outline" onPress={optimize} disabled={stops.length < 3} style={{ flex: 1 }} />
+        <Button label="Otimizar ordem" kind="outline" onPress={optimize} disabled={stops.length < 3} style={{ flex: 1 }} />
         <Button label="Abrir no mapa" kind="dark" onPress={() => void maps()} disabled={stops.length === 0} style={{ flex: 1 }} />
       </View>
       <View style={s.btnRow}>
