@@ -11,12 +11,16 @@ import { RouteMap } from './RouteMap';
 
 const esc = (s: string) => s.replace(/[<>&"'\\]/g, ' ');
 
-const buildHtml = (stops: Place[], id: string) => {
+type Base = { name: string; lat: number; lng: number } | undefined;
+
+const buildHtml = (stops: Place[], id: string, base: Base) => {
+  const home = JSON.stringify(base ? { a: base.lat, o: base.lng, n: esc(base.name) } : null);
   const pts = JSON.stringify(stops.map((p) => ({ a: p.lat, o: p.lng, n: esc(p.name) })));
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>html,body,#m{height:100%;margin:0;background:#E6EDFD}
+.h{background:#14213D;color:#fff;border-radius:8px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font:700 13px system-ui,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45)}
 .n{background:#C2410C;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font:700 13px system-ui,sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45)}
 .leaflet-tooltip{font:600 12px system-ui,sans-serif;color:#14213D}</style></head>
 <body><div id="m"></div>
@@ -29,7 +33,9 @@ var map=L.map("m",{zoomControl:true,scrollWheelZoom:false});
 var tiles=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"});
 var told=false;tiles.on("tileload",function(){if(!told){told=true;say("ok")}});
 tiles.addTo(map);
+var H=${home};
 var ll=P.map(function(p){return [p.a,p.o]});
+if(H){ll=[[H.a,H.o]].concat(ll,[[H.a,H.o]]);L.marker([H.a,H.o],{icon:L.divIcon({className:"",html:'<div class="h">H</div>',iconSize:[26,26],iconAnchor:[13,13]})}).addTo(map).bindTooltip("Hospedagem: "+H.n,{direction:"top",offset:[0,-12]})}
 if(ll.length>1){L.polyline(ll,{color:"#1D4ED8",weight:4,opacity:.85,dashArray:"2 9",lineCap:"round"}).addTo(map)}
 P.forEach(function(p,i){L.marker([p.a,p.o],{icon:L.divIcon({className:"",html:'<div class="n">'+(i+1)+'</div>',iconSize:[26,26],iconAnchor:[13,13]})}).addTo(map).bindTooltip((i+1)+". "+p.n,{direction:"top",offset:[0,-12]})});
 if(ll.length>1){map.fitBounds(ll,{padding:[34,34],maxZoom:16})}else{map.setView(ll[0],15)}
@@ -47,12 +53,12 @@ window.__map=map;
 </script></body></html>`;
 };
 
-export const DayMap = ({ stops, height = 240 }: { stops: Place[]; height?: number }) => {
+export const DayMap = ({ stops, height = 240, base }: { stops: Place[]; height?: number; base?: Base }) => {
   const id = useRef(`m${Math.random().toString(36).slice(2, 9)}`).current;
   const [ready, setReady] = useState(false);
-  const key = stops.map((p) => p.id).join('|');
+  const key = `${stops.map((p) => p.id).join('|')}@${base ? `${base.lat},${base.lng}` : ''}`;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const html = useMemo(() => buildHtml(stops, id), [key]);
+  const html = useMemo(() => buildHtml(stops, id, base), [key]);
 
   useEffect(() => setReady(false), [key]);
 

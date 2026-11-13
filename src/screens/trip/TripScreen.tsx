@@ -43,7 +43,8 @@ export const TripScreen = ({ id, initialTab }: { id: string; initialTab?: Tab })
   const activeVoter = localMembers.some((m) => m.id === voterId) ? voterId : (localMembers[0]?.id ?? trip.members[0].id);
 
   const generate = () => {
-    updateTrip(trip.id, (t) => ({ ...t, itinerary: generateItinerary(t) }), true);
+    // gerar de novo parte dos votos: as paradas fixadas à mão deixam de valer
+    updateTrip(trip.id, (t) => ({ ...t, itinerary: generateItinerary(t), locked: [] }), true);
     setTab('roteiro');
   };
 

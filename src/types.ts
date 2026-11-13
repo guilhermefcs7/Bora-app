@@ -80,6 +80,10 @@ export type Trip = {
   votes: Record<string, Record<string, VoteValue>>;
   /** ids dos lugares por dia; null enquanto não gerado */
   itinerary: string[][] | null;
+  /** ids de paradas fixadas: o reorganizar não as tira do dia em que estão */
+  locked?: string[];
+  /** hospedagem: de onde cada dia sai e para onde volta */
+  base?: { name: string; lat: number; lng: number };
   checklist: ChecklistItem[];
   updatedAt: number;
   /** true quando a viagem já foi enviada ao Supabase */

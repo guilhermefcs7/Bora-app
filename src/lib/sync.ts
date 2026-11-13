@@ -19,7 +19,7 @@ export const syncEnabled = () => client !== null;
 /** Parte da viagem compartilhada entre todos (membros e votos ficam em tabelas próprias). */
 type SharedData = Pick<
   Trip,
-  'id' | 'destination' | 'lat' | 'lng' | 'days' | 'pace' | 'perDay' | 'searchKm' | 'cover' | 'places' | 'itinerary' | 'checklist' | 'updatedAt'
+  'id' | 'destination' | 'lat' | 'lng' | 'days' | 'pace' | 'perDay' | 'searchKm' | 'cover' | 'places' | 'itinerary' | 'locked' | 'base' | 'checklist' | 'updatedAt'
 >;
 
 const sharedOf = (t: Trip): SharedData => ({
@@ -34,6 +34,8 @@ const sharedOf = (t: Trip): SharedData => ({
   cover: t.cover,
   places: t.places,
   itinerary: t.itinerary,
+  locked: t.locked,
+  base: t.base,
   checklist: t.checklist,
   updatedAt: t.updatedAt,
 });
@@ -113,6 +115,8 @@ export const mergeRemote = (local: Trip, remote: Omit<Trip, 'localMemberIds' | '
       ? {
           places: remote.places,
           itinerary: remote.itinerary,
+          locked: remote.locked,
+          base: remote.base,
           checklist: remote.checklist,
           days: remote.days,
           pace: remote.pace,

@@ -4,7 +4,7 @@ import { catalog } from './fixtures';
 import { applyWikidata, classifyDescription, classifyPt, mergeSources, parseSpots, parseSuggestions, pickPlaces, type WikiPage } from '../src/lib/places';
 import { consensusLabel, memberProgress, rankPlaces } from '../src/lib/consensus';
 import { distanceKm, travel } from '../src/lib/geo';
-import { dayDistanceKm, generateItinerary, itineraryPlaces, optimizeRoute, scheduleDay } from '../src/lib/itinerary';
+import { dayDistanceKm, generateItinerary, itineraryChanges, itineraryPlaces, loopKm, optimizeRoute, reorganize, scheduleDay, tripKm } from '../src/lib/itinerary';
 import { mergeRemote } from '../src/lib/sync';
 import { profileOf, matchInterests } from '../src/lib/audience';
 import { findCenter } from '../src/lib/places';
@@ -246,4 +246,49 @@ test('centro do destino: usa o artigo da própria cidade quando existe', () => {
   assert.deepEqual([c.lat, c.lng], [-13.005, -41.371]);
   assert.equal(findCenter('Mucuge', pages, { lat: -13.2, lng: -41.5 }).lat, -13.005);
   assert.equal(findCenter('Lençóis', pages, { lat: -12.5, lng: -41.3 }).lat, -12.5);
+});
+
+test('reorganizar: junta o que está perto, mantém as mesmas paradas e nunca piora', () => {
+  const t = { ...baseTrip(), days: 3 };
+  const P = t.places; // Belém: 0,1,2 · centro: 3,4,5,6,7,8 · longe: 10 (Oceanário)
+  // roteiro bagunçado à mão: Belém espalhada pelos três dias
+  t.itinerary = [[P[0].id, P[5].id, P[10].id], [P[1].id, P[3].id, P[7].id], [P[2].id, P[4].id, P[6].id]];
+  const next = reorganize(t);
+  assert.deepEqual([...next.flat()].sort(), [...t.itinerary.flat()].sort());
+  assert.deepEqual(next.map((d) => d.length), [3, 3, 3]);
+  const dayOf = (id: string) => next.findIndex((d) => d.includes(id));
+  assert.equal(new Set([P[0].id, P[1].id, P[2].id].map(dayOf)).size, 1, 'Belém deveria ficar no mesmo dia');
+  const ch = itineraryChanges(t, next);
+  assert.ok(ch.kmAfter < ch.kmBefore, `${ch.kmBefore} -> ${ch.kmAfter}`);
+  assert.ok(ch.moves.length > 0);
+  // aplicar de novo não deve propor mais nada relevante
+  const again = itineraryChanges({ ...t, itinerary: next }, reorganize({ ...t, itinerary: next }));
+  assert.ok(again.kmAfter <= again.kmBefore + 1e-6);
+});
+
+test('reorganizar: parada fixada não muda de dia', () => {
+  const t = { ...baseTrip(), days: 3 };
+  const P = t.places;
+  t.itinerary = [[P[0].id, P[5].id, P[10].id], [P[1].id, P[3].id, P[7].id], [P[2].id, P[4].id, P[6].id]];
+  const locked = [P[10].id, P[1].id];
+  const next = reorganize({ ...t, locked });
+  assert.ok(next[0].includes(P[10].id), 'Oceanário fixado no dia 1');
+  assert.ok(next[1].includes(P[1].id), 'Jerónimos fixado no dia 2');
+  assert.deepEqual([...next.flat()].sort(), [...t.itinerary.flat()].sort());
+  assert.ok(itineraryChanges(t, next).moves.every((m) => !locked.includes(m.place.id)));
+  // todas fixadas: nada muda de dia
+  const all = reorganize({ ...t, locked: t.itinerary.flat() });
+  assert.equal(itineraryChanges(t, all).moves.length, 0);
+});
+
+test('hospedagem: a rota do dia considera a ida e a volta', () => {
+  const P = lisboa.places;
+  const stops = [P[3], P[0], P[7], P[1]]; // centro, Belém, centro, Belém
+  const base = { lat: P[7].lat, lng: P[7].lng }; // hospedado na Praça do Comércio
+  const opt = optimizeRoute(stops, base);
+  assert.ok(loopKm(opt, base) <= loopKm(stops, base) + 1e-9);
+  assert.ok(loopKm(opt, base) > loopKm(opt), 'com hospedagem o percurso inclui ida e volta');
+  assert.equal(optimizeRoute([P[0]], base).length, 1);
+  assert.equal(tripKm([], base), 0);
+  assert.equal(tripKm([[]], base), 0);
 });

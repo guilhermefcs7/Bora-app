@@ -29,6 +29,7 @@ Se o Expo Go reclamar da versão do SDK, atualize o Expo Go.
 | Grupo | Código de convite, progresso de cada pessoa, ranking de consenso. Modo "passa o celular" para várias pessoas no mesmo aparelho |
 | Lugares | Foto, frase "pode encaixar bem se você gosta de…", público recomendado e "Ler mais" com o resumo da Wikipédia. Interesses do perfil destacam os lugares que combinam |
 | Roteiro | Atividades espalhadas por todos os dias, agrupadas por proximidade; mapa real do dia (OpenStreetMap); horários e deslocamentos estimados; mover para qualquer dia, reordenar, remover, otimizar, abrir no app de mapas, compartilhar como texto |
+| Reorganizar | "Reorganizar viagem" redistribui as paradas entre os dias por proximidade e mostra a proposta (o que muda de dia e quantos km economiza) antes de aplicar. Paradas fixadas com o cadeado não mudam de dia. Com a hospedagem definida, cada dia é calculado saindo dela e voltando para ela |
 | Extras | Checklist da viagem, lugares salvos, perfil com nome e cor |
 | Offline | Viagens já criadas ficam no aparelho: votar, ver e editar o roteiro funcionam sem rede. Criar viagem precisa de internet |
 

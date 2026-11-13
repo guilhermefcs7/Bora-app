@@ -41,10 +41,12 @@ export const mapsUrl = (stops: Place[]): string =>
     ? `https://www.google.com/maps/search/?api=1&query=${stops[0].lat},${stops[0].lng}`
     : `https://www.google.com/maps/dir/${stops.map((p) => `${p.lat},${p.lng}`).join('/')}`;
 
-export const openMaps = async (stops: Place[]): Promise<boolean> => {
+export const openMaps = async (stops: Place[], base?: { name: string; lat: number; lng: number }): Promise<boolean> => {
   if (stops.length === 0) return false;
+  // com hospedagem, a rota sai dela e volta para ela
+  const anchor = base ? ({ ...stops[0], id: 'base', name: base.name, lat: base.lat, lng: base.lng } as Place) : null;
   try {
-    await Linking.openURL(mapsUrl(stops));
+    await Linking.openURL(mapsUrl(anchor ? [anchor, ...stops, anchor] : stops));
     return true;
   } catch {
     return false;
